@@ -13,6 +13,7 @@ bool execute_statement(
 ) {
     memset(result, 0, sizeof(*result));
 
+    /* 파서가 정한 문장 타입에 맞춰 스토리지 동작으로 연결한다. */
     if (statement->type == STATEMENT_INSERT) {
         result->kind = EXECUTION_INSERT;
         return append_insert_row(db_root, &statement->as.insert, &result->affected_rows, error, error_size);
@@ -28,6 +29,7 @@ bool execute_statement(
 }
 
 void free_execution_result(ExecutionResult *result) {
+    /* SELECT 결과만 동적 결과 테이블을 들고 있으므로 별도 해제가 필요하다. */
     if (result->kind == EXECUTION_SELECT) {
         free_query_result(&result->query_result);
     }
@@ -67,6 +69,7 @@ void print_execution_result(const ExecutionResult *result, FILE *stream) {
             return;
         }
 
+        /* 먼저 헤더 길이로 열 너비를 잡고, 이후 데이터 길이를 반영해 확장한다. */
         for (column_index = 0; column_index < query->columns.count; ++column_index) {
             widths[column_index] = strlen(query->columns.items[column_index]);
         }
@@ -80,6 +83,7 @@ void print_execution_result(const ExecutionResult *result, FILE *stream) {
             }
         }
 
+        /* 계산된 열 너비를 기준으로 헤더와 본문을 같은 폭으로 맞춘다. */
         print_separator(widths, query->columns.count, stream);
         fputc('|', stream);
         for (column_index = 0; column_index < query->columns.count; ++column_index) {

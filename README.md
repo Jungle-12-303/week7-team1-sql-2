@@ -109,6 +109,65 @@ flowchart TB
 
 ---
 
+## INSERT / SELECT 로직
+
+파일 기반 DB이기 때문에 `INSERT`와 `SELECT`는 모두 `.schema`와 `.data` 파일을 기준으로 동작합니다.  
+핵심은 `INSERT`는 "스키마 순서에 맞춰 한 줄을 추가"하는 과정이고, `SELECT`는 "스키마를 기준으로 컬럼 위치를 해석한 뒤 `.data`를 순회"하는 과정입니다.
+
+### INSERT
+
+```mermaid
+flowchart TD
+    A["INSERT SQL"] --> B["parser.c에서 InsertStatement 생성"]
+    B --> C["storage.c에서 대상 테이블 경로 계산"]
+    C --> D[".schema 로드"]
+    D --> E["INSERT 컬럼명과 스키마 컬럼 매핑"]
+    E --> F["스키마 순서에 맞게 값 재배치"]
+    F --> G["특수문자 escape 후 한 줄 직렬화"]
+    G --> H[".data 파일 끝에 append"]
+```
+
+INSERT 동작 단계:
+
+1. `parser.c`가 `INSERT INTO ... VALUES ...`를 `InsertStatement`로 파싱합니다.
+2. `storage.c`가 대상 테이블의 `.schema` / `.data` 경로를 계산합니다.
+3. `.schema`를 읽어 실제 테이블 컬럼 순서를 확인합니다.
+4. INSERT에 들어온 컬럼명을 스키마 컬럼과 매핑합니다.
+5. 값을 스키마 순서대로 다시 정렬하고, 빠진 컬럼은 빈 문자열로 채웁니다.
+6. `|`, `\`, 개행 같은 문자를 escape해서 한 줄 텍스트로 직렬화합니다.
+7. 완성된 row를 `.data` 파일 끝에 추가합니다.
+
+### SELECT
+
+```mermaid
+flowchart TD
+    A["SELECT SQL"] --> B["parser.c에서 SelectStatement 생성"]
+    B --> C["storage.c에서 대상 테이블 경로 계산"]
+    C --> D[".schema 로드"]
+    D --> E["조회 컬럼 / WHERE 컬럼 인덱스 결정"]
+    E --> F[".data 파일을 한 줄씩 읽기"]
+    F --> G["row를 컬럼 단위로 복원"]
+    G --> H{"WHERE 만족?"}
+    H -- "아니오" --> F
+    H -- "예" --> I["필요한 컬럼만 projection"]
+    I --> J["QueryResult에 행 추가"]
+    J --> F
+    F --> K["executor.c가 표 형태로 출력"]
+```
+
+SELECT 동작 단계:
+
+1. `parser.c`가 `SELECT ... FROM ... WHERE ...`를 `SelectStatement`로 파싱합니다.
+2. `storage.c`가 `.schema`를 읽어 전체 컬럼 목록을 확보합니다.
+3. `SELECT *`인지, 특정 컬럼만 조회하는지에 따라 projection 인덱스를 준비합니다.
+4. `WHERE column = value`가 있으면 비교할 컬럼 인덱스를 먼저 찾습니다.
+5. `.data` 파일을 한 줄씩 읽어 각 row를 다시 컬럼 값 목록으로 복원합니다.
+6. WHERE 조건을 통과한 row만 선택합니다.
+7. 필요한 컬럼만 뽑아 `QueryResult`에 누적합니다.
+8. 마지막에 `executor.c`가 결과를 테이블 형식으로 출력합니다.
+
+---
+
 ## 파일 기반 DB 레이아웃
 
 예시 DB 루트:
@@ -148,25 +207,6 @@ escape 규칙:
 - `|` → `\|`
 - `\` → `\\`
 - 개행(`\n`) / 캐리지(`\r`)을 문자열에 저장할 때 이스케이프
-
----
-
-## INSERT 처리 흐름
-
-1. 대상 테이블의 `.schema` 로드
-2. INSERT 절의 컬럼 목록과 값 목록 매핑 검사
-3. 누락/초과 컬럼 오류 검사
-4. 값 순서를 스키마 순으로 맞춤
-5. `.data` 파일에 한 줄 append
-
----
-
-## SELECT 처리 흐름
-
-1. `.schema` 로드로 컬럼 인덱스 준비
-2. `*` 또는 지정 컬럼 기준으로 projection 구성
-3. `.data` 전체 행을 순회하며 `WHERE` 조건 필터
-4. 결과 rows를 `QueryResult`로 누적해 출력
 
 ---
 

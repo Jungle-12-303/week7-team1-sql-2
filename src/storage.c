@@ -21,6 +21,7 @@ static bool build_table_paths(
         return false;
     }
 
+    /* 스키마가 있으면 db_root/schema/table.*, 없으면 db_root/table.* 형태로 만든다. */
     if (schema != NULL && schema[0] != '\0') {
         schema_length = strlen(db_root) + strlen(schema) + strlen(name->table) + strlen(".schema") + 3;
         data_length = strlen(db_root) + strlen(schema) + strlen(name->table) + strlen(".data") + 3;
@@ -83,6 +84,7 @@ static bool split_pipe_line(const char *line, StringList *values, char *error, s
     while (true) {
         char ch = line[index];
 
+        /* 줄 끝에 도달하면 마지막 필드를 결과 리스트에 확정한다. */
         if (ch == '\0' || ch == '\n') {
             if (buffer == NULL) {
                 buffer = (char *) malloc(1);
@@ -107,6 +109,7 @@ static bool split_pipe_line(const char *line, StringList *values, char *error, s
             continue;
         }
 
+        /* 파이프를 만나면 지금까지 읽은 버퍼를 하나의 셀 값으로 저장한다. */
         if (ch == '|') {
             if (buffer == NULL) {
                 buffer = (char *) malloc(1);
@@ -143,6 +146,7 @@ static bool split_pipe_line(const char *line, StringList *values, char *error, s
             capacity = new_capacity;
         }
 
+        /* 직렬화 때 이스케이프된 개행/파이프/백슬래시를 다시 원문으로 복원한다. */
         if (ch == '\\') {
             char next = line[index + 1];
             if (next == 'n') {
@@ -177,6 +181,7 @@ static char *escape_field(const char *value) {
         return NULL;
     }
 
+    /* 저장 형식에서 의미가 겹치는 문자만 골라 두 글자 표현으로 바꾼다. */
     for (index = 0; value[index] != '\0'; ++index) {
         char ch = value[index];
         size_t extra = (ch == '\\' || ch == '|' || ch == '\n' || ch == '\r') ? 2 : 1;
@@ -223,6 +228,7 @@ static char *serialize_row(const StringList *values) {
         return NULL;
     }
 
+    /* 모든 셀을 먼저 escape한 뒤 최종 한 줄 크기를 계산한다. */
     for (index = 0; index < values->count; ++index) {
         escaped[index] = escape_field(values->items[index]);
         if (escaped[index] == NULL) {
@@ -246,6 +252,8 @@ static char *serialize_row(const StringList *values) {
     }
 
     output[0] = '\0';
+
+    /* escape된 셀을 파이프로 이어 붙여 데이터 파일의 한 줄을 만든다. */
     for (index = 0; index < values->count; ++index) {
         strcat(output, escaped[index]);
         if (index + 1 < values->count) {
@@ -263,6 +271,7 @@ static bool query_result_append_row(QueryResult *result, const StringList *value
     ResultRow *new_rows;
     ResultRow *row;
 
+    /* 결과 행 배열이 꽉 차면 뒤에 이어 붙일 수 있게 확장한다. */
     if (result->row_count == result->row_capacity) {
         size_t new_capacity = result->row_capacity == 0 ? 4 : result->row_capacity * 2;
         new_rows = (ResultRow *) realloc(result->rows, sizeof(ResultRow) * new_capacity);
@@ -276,6 +285,8 @@ static bool query_result_append_row(QueryResult *result, const StringList *value
 
     row = &result->rows[result->row_count];
     memset(row, 0, sizeof(*row));
+
+    /* 원본 임시 버퍼와 분리하기 위해 셀 값을 하나씩 복사해 결과 행에 담는다. */
     for (index = 0; index < values->count; ++index) {
         if (!string_list_append(&row->values, values->items[index])) {
             string_list_free(&row->values);
@@ -303,6 +314,7 @@ bool load_table_definition(
         return false;
     }
 
+    /* 경로뿐 아니라 테이블 이름 자체도 복사해 두어 이후 해제와 오류 메시지에 쓴다. */
     table->name.schema = sql_strdup(name->schema);
     table->name.table = sql_strdup(name->table);
     if ((name->schema != NULL && table->name.schema == NULL) || (name->table != NULL && table->name.table == NULL)) {
@@ -317,6 +329,7 @@ bool load_table_definition(
         return false;
     }
 
+    /* 스키마 파일 한 줄을 컬럼 이름 목록으로 복원한다. */
     if (!split_pipe_line(schema_content, &table->columns, error, error_size)) {
         free(schema_content);
         free_table_definition(table);
@@ -335,8 +348,13 @@ bool load_table_definition(
 }
 
 bool append_insert_row(
+    
     const char *db_root,
+    
+    //파싱 결과 구조체 포인터
     const InsertStatement *statement,
+
+
     size_t *affected_rows,
     char *error,
     size_t error_size
@@ -364,6 +382,7 @@ bool append_insert_row(
         return false;
     }
 
+    /* 테이블 전체 컬럼 수에 맞춰 기본 슬롯을 만들고, 지정되지 않은 컬럼은 빈 문자열로 둔다. */
     for (column_index = 0; column_index < table.columns.count; ++column_index) {
         if (!string_list_append(&ordered_values, "")) {
             free_table_definition(&table);
@@ -374,6 +393,7 @@ bool append_insert_row(
         }
     }
 
+    /* INSERT에 들어온 컬럼명을 실제 스키마 순서에 맞는 위치로 다시 배치한다. */
     for (column_index = 0; column_index < statement->columns.count; ++column_index) {
         int target_index = find_column_index(&table.columns, statement->columns.items[column_index]);
         if (target_index < 0) {
@@ -453,6 +473,7 @@ bool run_select_query(
         return false;
     }
 
+    /* SELECT * 이면 모든 컬럼을 그대로 보여 주고, 아니면 요청 컬럼만 인덱스로 매핑한다. */
     if (statement->select_all) {
         for (selected_index = 0; selected_index < table.columns.count; ++selected_index) {
             if (!string_list_append(&projected_columns, table.columns.items[selected_index])) {
@@ -502,6 +523,7 @@ bool run_select_query(
         }
     }
 
+    /* WHERE가 있으면 비교에 쓸 대상 컬럼 위치를 먼저 고정해 둔다. */
     if (statement->where.enabled) {
         where_index = find_column_index(&table.columns, statement->where.column);
         if (where_index < 0) {
@@ -515,6 +537,7 @@ bool run_select_query(
 
     file = fopen(table.data_path, "rb");
     if (file == NULL) {
+        /* 데이터 파일이 아직 없으면 빈 테이블로 간주하고 빈 파일을 만들어 연다. */
         if (!ensure_parent_directory(table.data_path, error, error_size) ||
             !write_text_file(table.data_path, "", error, error_size)) {
             free(selected_indexes);
@@ -535,6 +558,7 @@ bool run_select_query(
 
     result->columns = projected_columns;
 
+    /* 파일을 한 줄씩 읽으면서 WHERE 필터를 적용하고, 통과한 행만 투영해서 결과에 넣는다. */
     while (fgets(line, sizeof(line), file) != NULL) {
         StringList row_values;
         StringList projected_row;
@@ -608,6 +632,7 @@ void free_table_definition(TableDefinition *table) {
 void free_query_result(QueryResult *result) {
     size_t index;
 
+    /* 결과 컬럼과 각 행의 문자열 리스트를 순서대로 모두 정리한다. */
     string_list_free(&result->columns);
     for (index = 0; index < result->row_count; ++index) {
         string_list_free(&result->rows[index].values);

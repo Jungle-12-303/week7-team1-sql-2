@@ -46,10 +46,12 @@ typedef struct {
     size_t capacity;
 } SQLScript;
 
+/* AST 수명 관리 */
 void free_qualified_name(QualifiedName *name);
 void free_statement(Statement *statement);
 void free_script(SQLScript *script);
 
+/* SQL 파싱 */
 bool parse_sql_script(const char *source, SQLScript *script, char *error, size_t error_size);
 
 #endif

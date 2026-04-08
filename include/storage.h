@@ -23,6 +23,7 @@ typedef struct {
     size_t row_capacity;
 } QueryResult;
 
+/* 테이블 로딩 및 질의 실행 */
 bool load_table_definition(
     const char *db_root,
     const QualifiedName *name,
@@ -30,7 +31,6 @@ bool load_table_definition(
     char *error,
     size_t error_size
 );
-
 bool append_insert_row(
     const char *db_root,
     const InsertStatement *statement,
@@ -38,7 +38,6 @@ bool append_insert_row(
     char *error,
     size_t error_size
 );
-
 bool run_select_query(
     const char *db_root,
     const SelectStatement *statement,
@@ -47,6 +46,7 @@ bool run_select_query(
     size_t error_size
 );
 
+/* 결과 메모리 해제 */
 void free_table_definition(TableDefinition *table);
 void free_query_result(QueryResult *result);
 

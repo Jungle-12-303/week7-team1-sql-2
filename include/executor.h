@@ -17,6 +17,7 @@ typedef struct {
     QueryResult query_result;
 } ExecutionResult;
 
+/* 실행 및 결과 처리 */
 bool execute_statement(
     const Statement *statement,
     const char *db_root,
@@ -24,7 +25,6 @@ bool execute_statement(
     char *error,
     size_t error_size
 );
-
 void free_execution_result(ExecutionResult *result);
 void print_execution_result(const ExecutionResult *result, FILE *stream);
 

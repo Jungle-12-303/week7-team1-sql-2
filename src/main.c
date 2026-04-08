@@ -22,6 +22,7 @@ int main(int argc, char **argv) {
     memset(&script, 0, sizeof(script));
     memset(error, 0, sizeof(error));
 
+    /* 짧은 형식과 긴 형식 둘 다 받아서 CLI 사용성을 유지한다. */
     if (argc == 3) {
         db_root = argv[1];
         sql_file = argv[2];
@@ -33,6 +34,7 @@ int main(int argc, char **argv) {
         return 1;
     }
 
+    /* 파일 읽기 실패와 파싱 실패를 분리해서 보여 주면 원인 파악이 쉽다. */
     source = read_text_file(sql_file, error, sizeof(error));
     if (source == NULL) {
         fprintf(stderr, "file error: %s\n", error);
@@ -45,6 +47,7 @@ int main(int argc, char **argv) {
         return 1;
     }
 
+    /* 하나의 SQL 파일 안에 여러 문장이 들어올 수 있으므로 순서대로 실행한다. */
     for (index = 0; index < script.count; ++index) {
         ExecutionResult result;
         memset(&result, 0, sizeof(result));

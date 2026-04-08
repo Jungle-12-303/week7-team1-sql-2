@@ -56,6 +56,7 @@ bool string_list_append(StringList *list, const char *value) {
     char **new_items;
     char *copy;
 
+    /* 리스트 공간이 부족하면 먼저 버퍼를 늘린다. */
     if (list->count == list->capacity) {
         size_t new_capacity = list->capacity == 0 ? 4 : list->capacity * 2;
         new_items = (char **) realloc(list->items, sizeof(char *) * new_capacity);
@@ -67,6 +68,7 @@ bool string_list_append(StringList *list, const char *value) {
         list->capacity = new_capacity;
     }
 
+    /* 외부 버퍼 수명과 무관하게 쓰도록 문자열을 복사해 저장한다. */
     copy = sql_strdup(value == NULL ? "" : value);
     if (copy == NULL) {
         return false;
@@ -79,6 +81,7 @@ bool string_list_append(StringList *list, const char *value) {
 void string_list_free(StringList *list) {
     size_t index;
 
+    /* 각 문자열이 개별 할당되어 있으므로 하나씩 먼저 해제한다. */
     for (index = 0; index < list->count; ++index) {
         free(list->items[index]);
     }
@@ -101,6 +104,7 @@ char *read_text_file(const char *path, char *error, size_t error_size) {
         return NULL;
     }
 
+    /* 전체 크기를 먼저 알아야 한 번에 읽을 버퍼를 정확히 잡을 수 있다. */
     if (fseek(file, 0L, SEEK_END) != 0) {
         fclose(file);
         snprintf(error, error_size, "failed to seek file: %s", path);
@@ -149,6 +153,7 @@ static bool write_mode_file(
 ) {
     FILE *file;
 
+    /* 상위 디렉터리가 없으면 파일 생성 자체가 실패하므로 먼저 보장한다. */
     if (!ensure_parent_directory(path, error, error_size)) {
         return false;
     }
@@ -159,6 +164,7 @@ static bool write_mode_file(
         return false;
     }
 
+    /* 내용이 있을 때만 쓰고, 빈 파일 생성도 허용한다. */
     if (content != NULL && fputs(content, file) == EOF) {
         fclose(file);
         snprintf(error, error_size, "failed to write file: %s", path);
@@ -194,6 +200,7 @@ bool ensure_directory_recursive(const char *path, char *error, size_t error_size
         return false;
     }
 
+    /* 운영체제 차이를 줄이기 위해 경로 구분자를 슬래시로 통일한다. */
     for (index = 0; index < length; ++index) {
         buffer[index] = path[index];
         if (buffer[index] == '\\') {
@@ -202,6 +209,7 @@ bool ensure_directory_recursive(const char *path, char *error, size_t error_size
     }
     buffer[length] = '\0';
 
+    /* 구분자를 만날 때마다 그 시점까지의 경로를 실제 디렉터리로 만든다. */
     for (index = 1; index <= length; ++index) {
         bool is_separator = buffer[index] == '/' || buffer[index] == '\0';
         if (!is_separator) {
@@ -241,6 +249,7 @@ bool ensure_parent_directory(const char *path, char *error, size_t error_size) {
     size_t length;
     bool ok;
 
+    /* 슬래시와 백슬래시 중 더 뒤에 있는 것을 실제 부모 경계로 본다. */
     if (last_backslash != NULL && (separator == NULL || last_backslash > separator)) {
         separator = last_backslash;
     }

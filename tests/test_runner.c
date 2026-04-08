@@ -39,6 +39,8 @@ static void test_parse_insert(void) {
     const char *sql = "INSERT INTO demo.students (id, name, major) VALUES (1, 'Alice', 'DB');";
 
     memset(&script, 0, sizeof(script));
+
+    /* INSERT 핵심 구조가 AST에 정확히 들어가는지 확인한다. */
     ASSERT_TRUE(parse_sql_script(sql, &script, error, sizeof(error)), error);
     ASSERT_TRUE(script.count == 1, "expected one parsed statement");
     ASSERT_TRUE(script.items[0].type == STATEMENT_INSERT, "expected INSERT statement");
@@ -55,6 +57,8 @@ static void test_parse_select_where(void) {
     const char *sql = "SELECT id, name FROM demo.students WHERE id = 1;";
 
     memset(&script, 0, sizeof(script));
+
+    /* WHERE 절이 있더라도 컬럼, 값, 활성화 상태가 정확히 잡히는지 본다. */
     ASSERT_TRUE(parse_sql_script(sql, &script, error, sizeof(error)), error);
     ASSERT_TRUE(script.count == 1, "expected one parsed statement");
     ASSERT_TRUE(script.items[0].type == STATEMENT_SELECT, "expected SELECT statement");
@@ -73,6 +77,8 @@ static void test_insert_and_select_roundtrip(void) {
     size_t affected_rows = 0;
 
     make_test_db_root(root);
+
+    /* 테스트용 스키마와 빈 데이터 파일을 먼저 만든다. */
     ASSERT_TRUE(
         write_text_file("tests/tmp/unit_db/demo/students.schema", "id|name|major", error, sizeof(error)),
         error
@@ -82,6 +88,7 @@ static void test_insert_and_select_roundtrip(void) {
         error
     );
 
+    /* INSERT 입력을 코드로 직접 구성해 스토리지 계층까지 바로 검증한다. */
     memset(&insert_statement, 0, sizeof(insert_statement));
     insert_statement.target.schema = sql_strdup("demo");
     insert_statement.target.table = sql_strdup("students");
@@ -95,6 +102,7 @@ static void test_insert_and_select_roundtrip(void) {
     ASSERT_TRUE(append_insert_row(root, &insert_statement, &affected_rows, error, sizeof(error)), error);
     ASSERT_TRUE(affected_rows == 1, "expected one affected row");
 
+    /* 같은 데이터를 SELECT로 다시 읽어 escape/restore 흐름까지 한 번에 본다. */
     memset(&select_statement, 0, sizeof(select_statement));
     select_statement.source.schema = sql_strdup("demo");
     select_statement.source.table = sql_strdup("students");

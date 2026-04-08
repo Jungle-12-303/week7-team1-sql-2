@@ -133,6 +133,7 @@ static bool read_string_token(
     size_t capacity = 0;
     int start_column = *column;
 
+    /* 문자열 내부에서는 ''를 하나의 따옴표 문자로 취급한다. */
     while (source[cursor] != '\0') {
         char ch = source[cursor];
         if (ch == '\'') {
@@ -226,6 +227,7 @@ static bool tokenize_sql(
     while (source[index] != '\0') {
         char ch = source[index];
 
+        /* 공백은 건너뛰되 줄 번호와 열 번호는 계속 맞춰 둔다. */
         if (isspace((unsigned char) ch)) {
             if (ch == '\n') {
                 line++;
@@ -237,6 +239,7 @@ static bool tokenize_sql(
             continue;
         }
 
+        /* 한 줄 주석은 줄 끝까지 통째로 무시한다. */
         if (ch == '-' && source[index + 1] == '-') {
             index += 2;
             column += 2;
@@ -247,6 +250,7 @@ static bool tokenize_sql(
             continue;
         }
 
+        /* 블록 주석은 닫는 지점까지 소비하면서 줄 위치도 함께 추적한다. */
         if (ch == '/' && source[index + 1] == '*') {
             index += 2;
             column += 2;
@@ -271,6 +275,7 @@ static bool tokenize_sql(
             continue;
         }
 
+        /* 알파벳/언더스코어로 시작하면 식별자 또는 예약어로 읽는다. */
         if (isalpha((unsigned char) ch) || ch == '_') {
             size_t start = index;
             int start_column = column;
@@ -290,6 +295,7 @@ static bool tokenize_sql(
             continue;
         }
 
+        /* 숫자와 음수 리터럴은 한 덩어리로 읽어 값 토큰으로 만든다. */
         if (isdigit((unsigned char) ch) || (ch == '-' && isdigit((unsigned char) source[index + 1]))) {
             size_t start = index;
             int start_column = column;
@@ -317,6 +323,7 @@ static bool tokenize_sql(
             continue;
         }
 
+        /* 남은 구분 기호는 한 글자 토큰으로 바로 추가한다. */
         switch (ch) {
             case ',':
                 if (!append_simple_token(tokens, TOKEN_COMMA, ch, line, column, error, error_size)) {
@@ -483,6 +490,7 @@ static bool parse_identifier_list(Parser *parser, StringList *list, char *error,
 
     memset(list, 0, sizeof(*list));
 
+    /* 식별자 하나를 읽고, 뒤에 쉼표가 있으면 같은 규칙을 반복한다. */
     do {
         token = peek(parser);
         if (token->type != TOKEN_IDENTIFIER) {
@@ -507,6 +515,7 @@ static bool parse_value_list(Parser *parser, StringList *list, char *error, size
 
     memset(list, 0, sizeof(*list));
 
+    /* VALUES 절도 식별자 목록과 같은 방식으로 쉼표 단위 반복 파싱한다. */
     do {
         token = peek(parser);
         if (token->type != TOKEN_STRING && token->type != TOKEN_NUMBER && token->type != TOKEN_IDENTIFIER) {
@@ -539,6 +548,8 @@ static bool parse_qualified_name(Parser *parser, QualifiedName *name, char *erro
     }
 
     parser->current++;
+
+    /* 점이 나오면 schema.table, 아니면 table 하나만 있는 이름으로 해석한다. */
     if (match(parser, TOKEN_DOT)) {
         has_schema = true;
         second = peek(parser);
@@ -569,6 +580,7 @@ static bool parse_insert(Parser *parser, Statement *statement, char *error, size
 
     memset(&insert_statement, 0, sizeof(insert_statement));
 
+    /* INSERT는 INTO 대상, 컬럼 목록, VALUES 목록 순서가 반드시 맞아야 한다. */
     if (!consume(parser, TOKEN_INTO, "expected INTO after INSERT", error, error_size)) {
         return false;
     }
@@ -628,6 +640,7 @@ static bool parse_select(Parser *parser, Statement *statement, char *error, size
 
     memset(&select_statement, 0, sizeof(select_statement));
 
+    /* SELECT 대상은 * 이거나, 쉼표로 구분된 컬럼 목록 중 하나다. */
     if (match(parser, TOKEN_STAR)) {
         select_statement.select_all = true;
     } else if (!parse_identifier_list(parser, &select_statement.columns, error, error_size)) {
@@ -644,6 +657,7 @@ static bool parse_select(Parser *parser, Statement *statement, char *error, size
         return false;
     }
 
+    /* WHERE가 있으면 컬럼 = 값 형태만 지원하므로 그 구조를 그대로 검증한다. */
     if (match(parser, TOKEN_WHERE)) {
         Token *column = peek(parser);
         Token *value;
@@ -705,10 +719,12 @@ bool parse_sql_script(const char *source, SQLScript *script, char *error, size_t
     while (!at_end(&parser)) {
         memset(&statement, 0, sizeof(statement));
 
+        /* 세미콜론만 연속으로 들어온 빈 문장은 그대로 건너뛴다. */
         if (match(&parser, TOKEN_SEMICOLON)) {
             continue;
         }
 
+        /* 현재 문장의 첫 예약어를 기준으로 INSERT/SELECT 파서를 선택한다. */
         if (match(&parser, TOKEN_INSERT)) {
             if (!parse_insert(&parser, &statement, error, error_size)) {
                 free_tokens(&parser.tokens);
@@ -729,6 +745,7 @@ bool parse_sql_script(const char *source, SQLScript *script, char *error, size_t
             return false;
         }
 
+        /* AST 배열에 문장을 저장한 뒤, 있으면 문장 끝 세미콜론도 소비한다. */
         if (!script_append(script, &statement)) {
             free_statement(&statement);
             free_tokens(&parser.tokens);
