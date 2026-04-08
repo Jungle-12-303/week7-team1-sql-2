@@ -52,53 +52,6 @@ sequenceDiagram
 
 ---
 
-## 모듈 구조(현재)
-
-```mermaid
-flowchart TB
-  subgraph Entry
-    MAIN["src/main.c"]
-  end
-
-  subgraph Parse
-    PARSER["src/parser.c"]
-  end
-
-  subgraph Execute
-    EXEC["src/executor.c"]
-    STORAGE["src/storage.c"]
-  end
-
-  subgraph Shared
-    COMMON["src/common.c"]
-  end
-
-  MAIN --> PARSER
-  PARSER --> EXEC
-  EXEC --> STORAGE
-  STORAGE --> COMMON
-  PARSER --> COMMON
-```
-
-핵심 파일:
-
-- `src/main.c`
-  - CLI 진입점, 인자 파싱, SQL 파일 로드, 실행 결과 출력.
-- `src/parser.c`
-  - tokenizer 코드 + 파서 코드 통합.
-  - `parse_sql_script()`가 문자열을 토큰화하고 문장 단위 구조(내부 Statement/SQLScript 형태)로 변환.
-- `src/executor.c`
-  - 파싱된 statement를 실행 타입별로 라우팅.
-  - INSERT/SELECT 실행 결과를 `ExecutionResult`로 정리.
-- `src/storage.c`
-  - `.schema` / `.data` 파일 읽기/쓰기와 조회 로직.
-  - 파일 경로 생성, 데이터 검색(기본 WHERE) 처리.
-- `src/common.c`
-  - 문자열 리스트, 파일 입출력, 경로 유틸(부모 디렉터리 생성) 등 공통 유틸리티.
-
-
----
-
 ## INSERT / SELECT 로직
 
 파일 기반 DB이기 때문에 `INSERT`와 `SELECT`는 모두 `.schema`와 `.data` 파일을 기준으로 동작합니다.  
@@ -160,7 +113,13 @@ SELECT 동작 단계:
 
 ---
 
-## 파일 기반 DB 레이아웃
+## 파일 입출력
+
+저희는 각 테이블을 `.schema`와 `.data` 두 파일로 분리해서 관리했습니다.  
+`.schema`는 컬럼 메타데이터를 저장하고, `.data`는 실제 row 데이터를 저장합니다.
+
+예를 들어 `demo.students` 테이블은 `students.schema`와 `students.data` 두 파일로 표현됩니다.  
+`.schema`에는 `id|name|major|grade`처럼 컬럼 순서가 저장되고, `.data`에는 실제 데이터가 한 줄에 한 row씩 기록됩니다.
 
 예시 DB 루트:
 
@@ -193,6 +152,60 @@ id|name|major|grade
 1|Alice|Database|A
 2|Bob|AI|B
 ```
+
+실제 파일 입출력에 사용한 핵심 함수:
+
+- `src/common.c`
+  - `read_text_file()`
+    - `.schema` 같은 텍스트 파일 전체를 한 번에 읽어 문자열로 가져옵니다.
+  - `write_text_file()`
+    - 새 파일을 만들거나 기존 파일을 덮어써서 초기 상태를 구성할 때 사용합니다.
+  - `append_text_file()`
+    - INSERT 결과 row를 `.data` 파일 끝에 이어 붙일 때 사용합니다.
+  - `ensure_parent_directory()`
+    - 파일을 쓰기 전에 상위 디렉터리가 없어서 실패하지 않도록 보장합니다.
+- `src/storage.c`
+  - `build_table_paths()`
+    - `[schema.]table` 이름을 실제 `.schema` / `.data` 경로로 바꿉니다.
+  - `load_table_definition()`
+    - `.schema`를 읽어 컬럼 순서를 메모리 구조로 올립니다.
+  - `serialize_row()`
+    - INSERT할 값을 파일에 저장 가능한 한 줄 문자열로 직렬화합니다.
+  - `split_pipe_line()`
+    - `.data` 파일의 한 줄을 다시 컬럼 값 목록으로 복원합니다.
+  - `append_insert_row()`
+    - INSERT 처리 결과를 `.data` 파일에 실제로 기록합니다.
+  - `run_select_query()`
+    - `.schema`와 `.data`를 읽어 SELECT 결과를 구성합니다.
+
+이 구조 덕분에 SQL 실행 결과를 메모리에서만 잠깐 처리하는 것이 아니라, 실제 파일 시스템에 저장하고 이후 다시 읽어오는 흐름을 만들 수 있었습니다.
+
+---
+
+## 시연 내용
+
+시연에서는 `examples/sql/demo_workflow.sql` 파일을 사용해 다음 흐름을 보여줍니다.
+
+1. `demo.students` 테이블에 대해 `INSERT`를 두 번 실행합니다.
+2. 전체 row를 조회하는 `SELECT *` 결과를 확인합니다.
+3. `WHERE id = 2` 조건으로 필요한 데이터만 조회합니다.
+
+시연에 사용되는 SQL 예시는 아래와 같습니다.
+
+```sql
+INSERT INTO demo.students (id, name, major, grade) VALUES (2, 'Bob', 'AI', 'B');
+INSERT INTO demo.students (id, name, major, grade) VALUES (3, 'Choi', 'Data', 'A');
+SELECT * FROM demo.students;
+SELECT name, grade FROM demo.students WHERE id = 2;
+```
+
+이 시연을 통해 다음을 한 번에 확인할 수 있습니다.
+
+- INSERT 결과가 실제 `.data` 파일에 row로 저장되는지
+- SELECT가 `.schema` 기준으로 컬럼 순서를 해석하는지
+- WHERE 조건으로 필요한 row만 필터링되는지
+- executor가 최종 결과를 표 형태로 출력하는지
+
 ---
 
 ## 빌드/실행/테스트
