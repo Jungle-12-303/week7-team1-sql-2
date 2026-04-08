@@ -42,6 +42,8 @@ typedef struct {
     size_t capacity;
 } TokenList;
 
+static void free_tokens(TokenList *tokens);
+
 static bool token_list_append(
     TokenList *tokens,
     TokenType type,

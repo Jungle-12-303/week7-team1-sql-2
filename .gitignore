@@ -1,3 +1,26 @@
 build/
 tests/tmp/
 examples/output/
+
+# C/C++ build artifacts
+*.o
+*.obj
+*.out
+*.a
+*.so
+*.dll
+*.dylib
+*.exe
+
+# Tooling files
+compile_commands.json
+.cache/
+
+# Editor and IDE files
+.idea/
+.vscode/
+.clangd
+
+# OS-generated files
+.DS_Store
+Thumbs.db
