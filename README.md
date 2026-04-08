@@ -22,10 +22,7 @@ SELECT id, name FROM demo.students WHERE id = 1;
 
 ---
 
-## 실행 파이프라인(최신 구조)
-
-`parser` 모듈 안으로 lexer를 통합한 상태입니다.
-
+## 실행 파이프라인
 ```mermaid
 flowchart LR
     A["SQL 파일"] --> B["Parser+Tokenizer (src/parser.c)"]
