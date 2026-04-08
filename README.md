@@ -53,6 +53,30 @@ sequenceDiagram
 
 전체 흐름은 `main.c`가 입력 파일을 읽고, `parser.c`가 SQL을 구조체로 파싱한 뒤, `executor.c`와 `storage.c`가 실제 동작을 수행하는 구조입니다.
 
+## 1-1. `parse_sql_script()` 로직
+
+```mermaid
+flowchart TD
+    A["parse_sql_script() in parser.c"] --> B["tokenize_sql() 호출"]
+    B --> C["SQL 문자열을 읽으며<br/>Token 생성"]
+    C --> D["Parser.tokens(TokenList)에<br/>저장"]
+
+    D --> E["parser.current 인덱스로<br/>TokenList 순회"]
+    E --> F{"현재 시작 토큰"}
+    F -- "INSERT" --> G["parse_insert() 호출"]
+    F -- "SELECT" --> H["parse_select() 호출"]
+
+    G --> I["Statement 생성"]
+    H --> I
+
+    I --> J["script_append() 호출"]
+    J --> K["SQLScript.items 동적배열에<br/>순서대로 저장"]
+```
+
+이 다이어그램은 `parse_sql_script()`가 SQL 문자열을 바로 실행하는 것이 아니라, 먼저 해석하기 쉬운 중간 구조로 바꿔 두는 과정을 보여준다. 첫 단계에서는 `tokenize_sql()`이 입력 문자열 전체를 읽으면서 키워드, 식별자, 값, 기호를 `Token` 단위로 분리하고, 이를 `Parser` 구조체 안의 `TokenList` 동적배열에 저장한다.
+
+그 다음 단계에서는 `parse_sql_script()`가 `parser.current` 인덱스를 움직이며 `TokenList`를 앞에서부터 순서대로 해석한다. 현재 문장의 시작 토큰이 `INSERT`이면 `parse_insert()`, `SELECT`이면 `parse_select()`를 호출해 하나의 `Statement`를 만들고, 완성된 `Statement`는 `parser.c` 내부 헬퍼 함수인 `script_append()`를 통해 `SQLScript.items` 동적배열에 순서대로 저장된다. 이후 `main.c`는 이 `SQLScript`를 문장 단위로 순회하면서 실행한다.
+
 ## 2. INSERT / SELECT 로직
 
 파일 기반 DB이기 때문에 핵심은 항상 `.schema`를 기준으로 컬럼 순서를 해석하고, `.data`를 한 줄씩 row로 다루는 것입니다.
