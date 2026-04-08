@@ -115,82 +115,103 @@ SELECT 동작 단계:
 
 ## 파일 입출력
 
-저희는 각 테이블을 `.schema`와 `.data` 두 파일로 분리해서 관리했습니다.  
-`.schema`는 컬럼 메타데이터를 저장하고, `.data`는 실제 row 데이터를 저장합니다.
+### 파일 구성
 
-예를 들어 `demo.students` 테이블은 `students.schema`와 `students.data` 두 파일로 표현됩니다.  
-`.schema`에는 `id|name|major|grade`처럼 컬럼 순서가 저장되고, `.data`에는 실제 데이터가 한 줄에 한 row씩 기록됩니다.
+- `.schema`
+  - 컬럼 메타데이터 저장
+  - 컬럼 순서 보존
+- `.data`
+  - 실제 row 데이터 저장
+  - 한 줄 = 한 row
 
-예시 DB 루트:
+### Ex. `demo.students` 테이블
 
 ```text
 db_root/
-  demo/
-    students.schema
-    students.data
+  demo
+  |_ students.schema
+  |_ students.data
 ```
 
-`schema`만 바로 쓰는 경우:
+### Ex. schema 없이 바로 쓰는 경우
 
 ```text
 db_root/
-  students.schema
-  students.data
+  |_ students.schema
+  |_ students.data
 ```
 
 ### `.schema`
-컬럼은 `|` 구분 텍스트
+
+- 저장 형식: `|` 구분 텍스트
+- 의미: 컬럼 순서 정의
 
 ```text
 id|name|major|grade
 ```
 
 ### `.data`
-한 줄이 한 row이며, `|` 구분 텍스트.
+
+- 저장 형식: `|` 구분 텍스트
+- 의미: 실제 row 데이터
+- 규칙: 한 줄 = 한 row
 
 ```text
 1|Alice|Database|A
 2|Bob|AI|B
 ```
 
-실제 파일 입출력에 사용한 핵심 함수:
+### 파일 입출력에 사용한 함수
 
-- `src/common.c`
-  - `read_text_file()`
-    - `.schema` 같은 텍스트 파일 전체를 한 번에 읽어 문자열로 가져옵니다.
-  - `write_text_file()`
-    - 새 파일을 만들거나 기존 파일을 덮어써서 초기 상태를 구성할 때 사용합니다.
-  - `append_text_file()`
-    - INSERT 결과 row를 `.data` 파일 끝에 이어 붙일 때 사용합니다.
-  - `ensure_parent_directory()`
-    - 파일을 쓰기 전에 상위 디렉터리가 없어서 실패하지 않도록 보장합니다.
-- `src/storage.c`
-  - `build_table_paths()`
-    - `[schema.]table` 이름을 실제 `.schema` / `.data` 경로로 바꿉니다.
-  - `load_table_definition()`
-    - `.schema`를 읽어 컬럼 순서를 메모리 구조로 올립니다.
-  - `serialize_row()`
-    - INSERT할 값을 파일에 저장 가능한 한 줄 문자열로 직렬화합니다.
-  - `split_pipe_line()`
-    - `.data` 파일의 한 줄을 다시 컬럼 값 목록으로 복원합니다.
-  - `append_insert_row()`
-    - INSERT 처리 결과를 `.data` 파일에 실제로 기록합니다.
-  - `run_select_query()`
-    - `.schema`와 `.data`를 읽어 SELECT 결과를 구성합니다.
+#### `src/common.c`
 
-이 구조 덕분에 SQL 실행 결과를 메모리에서만 잠깐 처리하는 것이 아니라, 실제 파일 시스템에 저장하고 이후 다시 읽어오는 흐름을 만들 수 있었습니다.
+- `read_text_file()`
+  - 텍스트 파일 전체 읽기
+- `write_text_file()`
+  - 파일 새로 쓰기 / 초기화
+- `append_text_file()`
+  - `.data` 끝에 row 추가
+- `ensure_parent_directory()`
+  - 상위 디렉터리 생성 보장
+
+#### `src/storage.c`
+
+- `build_table_paths()`
+  - `[schema.]table` -> `.schema` / `.data` 경로 변환
+- `load_table_definition()`
+  - `.schema` 로드
+  - 컬럼 순서 복원
+- `serialize_row()`
+  - INSERT row 직렬화
+- `split_pipe_line()`
+  - `.data` 한 줄 복원
+- `append_insert_row()`
+  - INSERT 결과를 `.data`에 기록
+- `run_select_query()`
+  - `.schema` / `.data` 기반 SELECT 수행
+
+### 정리
+
+- 테이블 단위 저장: `.schema` + `.data`
+- INSERT: row 직렬화 후 `.data` append
+- SELECT: `.schema` / `.data` 읽기 후 결과 복원
 
 ---
 
 ## 시연 내용
 
-시연에서는 `examples/sql/demo_workflow.sql` 파일을 사용해 다음 흐름을 보여줍니다.
+### 사용 파일
 
-1. `demo.students` 테이블에 대해 `INSERT`를 두 번 실행합니다.
-2. 전체 row를 조회하는 `SELECT *` 결과를 확인합니다.
-3. `WHERE id = 2` 조건으로 필요한 데이터만 조회합니다.
+- DB 경로: `examples/db`
+- SQL 파일: `examples/sql/demo_workflow.sql`
 
-시연에 사용되는 SQL 예시는 아래와 같습니다.
+### 시연 순서
+
+1. `demo.students` 테이블에 `INSERT` 2회 실행
+2. `SELECT *` 결과 확인
+3. `WHERE id = 2` 결과 확인
+
+### 시연 SQL
 
 ```sql
 INSERT INTO demo.students (id, name, major, grade) VALUES (2, 'Bob', 'AI', 'B');
@@ -199,12 +220,12 @@ SELECT * FROM demo.students;
 SELECT name, grade FROM demo.students WHERE id = 2;
 ```
 
-이 시연을 통해 다음을 한 번에 확인할 수 있습니다.
+### 확인 포인트
 
 - INSERT 결과가 실제 `.data` 파일에 row로 저장되는지
 - SELECT가 `.schema` 기준으로 컬럼 순서를 해석하는지
 - WHERE 조건으로 필요한 row만 필터링되는지
-- executor가 최종 결과를 표 형태로 출력하는지
+- `executor.c`가 최종 결과를 표 형태로 출력하는지
 
 ---
 
