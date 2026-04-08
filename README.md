@@ -65,20 +65,20 @@ flowchart TD
     B --> C["테이블 경로 계산"]
     C --> D[".schema 읽기"]
     D --> E["컬럼 순서 확인"]
-    E --> F["입력 값을 스키마 순서로 재배치"]
+    E --> F["값을 스키마 순서로 재배치"]
     F --> G["row 직렬화"]
     G --> H[".data 파일 끝에 append"]
 ```
 
 INSERT 단계:
 
-1. `parser.c`가 `INSERT INTO ... VALUES ...`를 `InsertStatement`로 파싱합니다.
-2. `storage.c`가 대상 테이블의 `.schema`와 `.data` 경로를 계산합니다.
-3. `.schema`를 읽어 실제 컬럼 순서를 복원합니다.
-4. INSERT에 들어온 컬럼명을 스키마 컬럼과 매핑합니다.
-5. 값을 스키마 순서대로 다시 정렬합니다.
-6. `serialize_row()`가 `|` 구분 텍스트 한 줄로 직렬화합니다.
-7. `append_text_file()`이 `.data` 끝에 row를 추가합니다.
+- SQL 파싱: `INSERT INTO ... VALUES ...` -> `InsertStatement`
+- 대상 경로 계산: `.schema`, `.data`
+- 스키마 로드: 실제 컬럼 순서 복원
+- 컬럼 매핑: 입력 컬럼명 <-> 스키마 컬럼
+- 값 재배치: 스키마 순서 기준 정렬
+- row 직렬화: `serialize_row()`
+- 파일 반영: `append_text_file()`로 `.data` append
 
 관련 코드 포인트:
 
@@ -92,27 +92,28 @@ INSERT 단계:
 flowchart TD
     A["SELECT SQL"] --> B["SelectStatement 생성"]
     B --> C[".schema 읽기"]
-    C --> D["조회할 컬럼 인덱스 결정"]
-    D --> E["WHERE 인덱스 결정"]
-    E --> F[".data를 한 줄씩 읽기"]
-    F --> G["split_pipe_line()으로 row 복원"]
+    C --> D["조회 컬럼 위치 결정"]
+    D --> E["WHERE 컬럼 위치 결정"]
+    E --> F[".data 한 줄 읽기"]
+    F --> G["row 값 목록 복원"]
     G --> H{"WHERE 만족?"}
     H -- "No" --> F
-    H -- "Yes" --> I["projection 적용"]
+    H -- "Yes" --> I["필요한 컬럼만 선택"]
     I --> J["QueryResult에 추가"]
     J --> F
+    F --> K["executor.c가 표 출력"]
 ```
 
 SELECT 단계:
 
-1. `parser.c`가 `SELECT ... FROM ... WHERE ...`를 `SelectStatement`로 파싱합니다.
-2. `.schema`를 읽어 전체 컬럼 목록을 확보합니다.
-3. `SELECT *`인지, 특정 컬럼만 조회하는지에 따라 projection 인덱스를 준비합니다.
-4. `WHERE column = value`가 있으면 비교할 컬럼 위치를 먼저 찾습니다.
-5. `.data`를 한 줄씩 읽어 `split_pipe_line()`으로 row를 복원합니다.
-6. WHERE를 통과한 row만 선택합니다.
-7. 필요한 컬럼만 `QueryResult`에 누적합니다.
-8. `executor.c`가 최종 결과를 표 형태로 출력합니다.
+- SQL 파싱: `SELECT ... FROM ... WHERE ...` -> `SelectStatement`
+- 스키마 로드: 전체 컬럼 목록 확보
+- projection 준비: 조회 대상 컬럼 위치 결정
+- WHERE 준비: 비교할 컬럼 위치 결정
+- row 복원: `.data` 한 줄 -> `split_pipe_line()`
+- 조건 필터링: WHERE 통과 row만 선택
+- projection 적용: 필요한 컬럼만 `QueryResult`에 누적
+- 결과 출력: `executor.c`가 표 형태로 출력
 
 관련 코드 포인트:
 
