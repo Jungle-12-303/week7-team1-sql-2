@@ -59,19 +59,64 @@ docker run --rm --entrypoint /bin/bash week7-mini-sql -lc \
 - "초기 텍스트 데이터는 백업(`.text.bak`)으로 보존하고, 활성 데이터 파일은 바이너리로 전환합니다."
 - "이 방식으로 기존 데이터 손실 위험을 줄이면서 저장 포맷을 바꿉니다."
 
-## 4단계(선택): 성능 측정 가능성 언급
-### 명령어 (긴 실행 시간 주의)
+## 4단계: 100만 건 벤치마크 시연 (Docker)
+### 명령어 (bash 셸)
 ```bash
-# 참고: 현재 benchmark.ps1은 PowerShell 스크립트이므로 로컬/CI 환경에서 실행
-# .\scripts\benchmark.ps1
+docker run --rm --entrypoint /bin/bash week7-mini-sql -lc \
+"set -e; \
+ mkdir -p /tmp/bench/demo /tmp/sql; \
+ printf 'id|name|major' > /tmp/bench/demo/students.schema; \
+ : > /tmp/bench/demo/students.data; \
+ seq 1 1000000 | awk '{printf \"INSERT INTO demo.students (name, major) VALUES (\\047U%s\\047, \\047M%s\\047);\\n\", $1, $1%10}' > /tmp/sql/insert.sql; \
+ t0=$(date +%s); /app/build/mini_sql /tmp/bench /tmp/sql/insert.sql >/tmp/out_insert.txt; t1=$(date +%s); \
+ echo \"SELECT name FROM demo.students WHERE id = 777777;\" > /tmp/sql/q_id.sql; \
+ echo \"SELECT name FROM demo.students WHERE major = 'M5';\" > /tmp/sql/q_lin.sql; \
+ t2=$(date +%s); /app/build/mini_sql /tmp/bench /tmp/sql/q_id.sql >/tmp/out_id.txt; t3=$(date +%s); \
+ t4=$(date +%s); /app/build/mini_sql /tmp/bench /tmp/sql/q_lin.sql >/tmp/out_lin.txt; t5=$(date +%s); \
+ echo \"insert_total_sec=$((t1-t0))\"; \
+ echo \"id_query_sec=$((t3-t2))\"; \
+ echo \"linear_query_sec=$((t5-t4))\"; \
+ tail -n 2 /tmp/out_id.txt; \
+ tail -n 2 /tmp/out_lin.txt"
 ```
 
+### 명령어 (PowerShell)
+```powershell
+$cmd = @'
+set -e
+mkdir -p /tmp/bench/demo /tmp/sql
+printf 'id|name|major' > /tmp/bench/demo/students.schema
+: > /tmp/bench/demo/students.data
+seq 1 1000000 | awk '{printf "INSERT INTO demo.students (name, major) VALUES (\047U%s\047, \047M%s\047);\n", $1, $1%10}' > /tmp/sql/insert.sql
+t0=$(date +%s); /app/build/mini_sql /tmp/bench /tmp/sql/insert.sql >/tmp/out_insert.txt; t1=$(date +%s)
+echo "SELECT name FROM demo.students WHERE id = 777777;" > /tmp/sql/q_id.sql
+echo "SELECT name FROM demo.students WHERE major = 'M5';" > /tmp/sql/q_lin.sql
+t2=$(date +%s); /app/build/mini_sql /tmp/bench /tmp/sql/q_id.sql >/tmp/out_id.txt; t3=$(date +%s)
+t4=$(date +%s); /app/build/mini_sql /tmp/bench /tmp/sql/q_lin.sql >/tmp/out_lin.txt; t5=$(date +%s)
+echo "insert_total_sec=$((t1-t0))"
+echo "id_query_sec=$((t3-t2))"
+echo "linear_query_sec=$((t5-t4))"
+tail -n 2 /tmp/out_id.txt
+tail -n 2 /tmp/out_lin.txt
+'@
+
+docker run --rm --entrypoint /bin/bash week7-mini-sql -lc "$cmd"
+```
+
+### 화면에서 기대할 결과
+- `insert_total_sec`, `id_query_sec`, `linear_query_sec` 숫자가 출력된다.
+- `WHERE id = 777777` 결과가 1건 출력된다.
+- `WHERE major = 'M5'` 결과가 다건 출력된다.
+
 ### 발표 멘트
-- "벤치마크 스크립트로 100만 건 기준 인덱스 조회와 선형 탐색을 비교할 수 있습니다."
-- "시연 시간에는 핵심 기능 검증 위주로 보여드리고, 벤치 로그는 별도 첨부 가능합니다."
+- "동일한 Docker 환경에서 100만 건 삽입 후 id 경로와 선형 경로를 분리 측정했습니다."
+- "OS와 로컬 컴파일러와 무관하게 동일 절차로 재현 가능합니다."
 
 ## Q&A 빠른 답변
 - 왜 id만 인덱스 최적화했나요?
-  - 과제 핵심 요구사항을 우선 충족하기 위해 id equality 경로를 명시적으로 최적화했습니다.                                       
+  - 과제 핵심 요구사항을 우선 충족하기 위해 id equality 경로를 명시적으로 최적화했습니다.
+- 벤치와 테스트 실행 기준은 무엇인가요?
+  - 본 프로젝트는 Docker 실행 경로를 기준으로 동일하게 재현합니다.
 - 마이그레이션 실패 시 데이터는?
   - 기존 텍스트 파일을 백업으로 남기고 전환합니다.
+

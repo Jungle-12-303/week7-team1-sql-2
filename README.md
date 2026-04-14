@@ -3,6 +3,8 @@
 이 프로젝트는 기존 텍스트 기반 `.data` 저장을 바이너리 포맷으로 전환하고,
 `INSERT` 시 자동 ID를 부여한 뒤 `WHERE id = ?`를 인덱스 경로로 빠르게 처리하도록 확장한 버전입니다.
 
+실행/검증 기준 환경은 Docker입니다.
+
 ## 1. 목표와 범위
 - `.data` 텍스트 저장 -> 바이너리 저장 전환
 - `INSERT` 시 `id` 자동 부여
@@ -42,18 +44,15 @@
 - 텍스트->바이너리 마이그레이션 후 조회 일치
 
 실행:
-```powershell
-.\scripts\test.ps1
+```bash
+docker build -t week7-mini-sql .
 ```
+
+`docker build` 단계에서 `make`와 `make test`가 함께 수행됩니다.
 
 ## 6. 벤치마크 (100만 건)
-스크립트:
-- `scripts/benchmark.ps1`
-
-기본:
-```powershell
-.\scripts\benchmark.ps1
-```
+벤치마크는 Docker 기준으로 실행합니다.
+실행 명령은 `docs/demo/demo_commands_only.md`의 "100만 건 벤치마크 (Docker)" 섹션을 사용하세요.
 
 측정 항목:
 - Case A: `WHERE id = ?` (인덱스)
@@ -63,18 +62,13 @@
 
 ## 7. 실행 방법
 빌드:
-```powershell
-.\scripts\build.ps1
+```bash
+docker build -t week7-mini-sql .
 ```
 
 데모:
-```powershell
-.\scripts\demo.ps1
-```
-
-직접 실행:
-```powershell
-.\build\mini_sql.exe examples\db examples\sql\demo_workflow.sql
+```bash
+docker run --rm week7-mini-sql
 ```
 
 ## 8. 4분 데모 스크립트 + Q&A

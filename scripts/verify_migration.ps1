@@ -4,6 +4,11 @@ $root = Split-Path -Parent $PSScriptRoot
 $buildDir = Join-Path $root "build"
 $dbRoot = Join-Path $root "tests\tmp\migration_verify_db"
 $sqlDir = Join-Path $root "tests\tmp\migration_verify_sql"
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+
+function Write-Utf8NoBom([string]$path, [string]$content) {
+    [System.IO.File]::WriteAllText($path, $content, $utf8NoBom)
+}
 
 & (Join-Path $PSScriptRoot "build.ps1") -OutputDir $buildDir
 
@@ -15,17 +20,13 @@ if (Test-Path $sqlDir) {
 }
 
 New-Item -ItemType Directory -Force $dbRoot, $sqlDir, (Join-Path $dbRoot "demo") | Out-Null
-Set-Content -NoNewline -Encoding UTF8 (Join-Path $dbRoot "demo\students.schema") "id|name|major"
-Set-Content -Encoding UTF8 (Join-Path $dbRoot "demo\students.data") @"
-1|LegacyA|DB
-2|LegacyB|AI
-3|LegacyC|SYS
-"@
+Write-Utf8NoBom (Join-Path $dbRoot "demo\students.schema") "id|name|major"
+Write-Utf8NoBom (Join-Path $dbRoot "demo\students.data") "1|LegacyA|DB`n2|LegacyB|AI`n3|LegacyC|SYS`n"
 
 $lineCountBefore = (Get-Content (Join-Path $dbRoot "demo\students.data")).Count
 
 $sqlPath = Join-Path $sqlDir "check.sql"
-Set-Content -NoNewline -Encoding UTF8 $sqlPath "SELECT * FROM demo.students;"
+Write-Utf8NoBom $sqlPath "SELECT * FROM demo.students;"
 
 $output = & (Join-Path $buildDir "mini_sql.exe") $dbRoot $sqlPath
 $outputText = ($output | Out-String)
