@@ -1,30 +1,30 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $PSScriptRoot
 $buildDir = Join-Path $root "build"
 $dbRoot = Join-Path $root "tests\tmp\functional_db"
 $sqlDir = Join-Path $root "tests\tmp\functional_sql"
 
-# 테스트는 항상 같은 바이너리 기준이어야 하므로 제일 먼저 다시 빌드한다.
+# 테스트는 현재 소스 기준으로 실행해야 하므로 먼저 빌드한다.
 & (Join-Path $PSScriptRoot "build.ps1") -OutputDir $buildDir
 
-# C 단위 테스트로 파서/스토리지 핵심 로직부터 먼저 검증한다.
+# C 단위 테스트를 먼저 실행해 파서/저장소 핵심 로직을 확인한다.
 & (Join-Path $buildDir "test_runner.exe")
 
-# 기능 테스트용 임시 DB와 SQL 작업 폴더를 새로 만든다.
+# 기능 테스트용 임시 DB와 SQL 작업 폴더를 준비한다.
 New-Item -ItemType Directory -Force $dbRoot, $sqlDir, (Join-Path $dbRoot "demo") | Out-Null
 Set-Content -Path (Join-Path $dbRoot "demo\students.schema") -Value "id|name|major" -NoNewline
 Set-Content -Path (Join-Path $dbRoot "demo\students.data") -Value "" -NoNewline
 
-# INSERT와 SELECT가 함께 들어간 시나리오를 만들어 CLI 전체 흐름을 검증한다.
+# INSERT와 SELECT가 함께 동작하는 워크플로 SQL을 생성한다.
 @"
-INSERT INTO demo.students (id, name, major) VALUES (1, 'Alice', 'DB');
-INSERT INTO demo.students (id, name, major) VALUES (2, 'Bob', 'AI');
+INSERT INTO demo.students (name, major) VALUES ('Alice', 'DB');
+INSERT INTO demo.students (name, major) VALUES ('Bob', 'AI');
 SELECT * FROM demo.students;
 SELECT name FROM demo.students WHERE id = 2;
 "@ | Set-Content -Path (Join-Path $sqlDir "workflow.sql") -NoNewline
 
-# 실제 CLI를 돌린 뒤 출력 텍스트를 모아 기대 결과가 나왔는지 확인한다.
+# CLI를 실행하고 출력 텍스트를 모아서 기대값과 비교한다.
 $output = & (Join-Path $buildDir "mini_sql.exe") $dbRoot (Join-Path $sqlDir "workflow.sql")
 $outputText = ($output | Out-String)
 

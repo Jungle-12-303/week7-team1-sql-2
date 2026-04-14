@@ -224,6 +224,14 @@ static bool tokenize_sql(
 
     memset(tokens, 0, sizeof(*tokens));
 
+    /* UTF-8 BOM(EF BB BF)이 있으면 토큰화 전에 건너뛴다. */
+    if ((unsigned char) source[0] == 0xEF &&
+        (unsigned char) source[1] == 0xBB &&
+        (unsigned char) source[2] == 0xBF) {
+        index = 3;
+        column = 4;
+    }
+
     while (source[index] != '\0') {
         char ch = source[index];
 
