@@ -8,6 +8,7 @@ inputs:
 outputs:
   - 실행 순서가 고정된 계획 문서 집합
   - 단계별 작업 카드(tasks/*)
+  - 텍스트 기반 저장소에서 바이너리 저장소로 전환된 구현 계획
 constraints:
   - 구현 언어는 C로 제한한다.
   - 범위는 B+ 트리 인덱스 연동 과제 요구사항을 벗어나지 않는다.
@@ -38,11 +39,12 @@ status: todo
 
 ## 작업 카드 매핑
 - `tasks/T01.md`: 범위/제약 확정
-- `tasks/T02.md`: 자동 ID 및 인덱스 구조 설계
-- `tasks/T03.md`: INSERT 경로 인덱스 등록 연동
+- `tasks/T02.md`: 바이너리 저장 구조 + 자동 ID/인덱스 설계
+- `tasks/T03.md`: 바이너리 INSERT 경로 + 인덱스 등록 연동
 - `tasks/T04.md`: WHERE id 인덱스 조회 분기
 - `tasks/T05.md`: 테스트/벤치마크 구현
 - `tasks/T06.md`: README/데모 업데이트
+- `tasks/T07.md`: 텍스트 데이터 -> 바이너리 데이터 마이그레이션 검증
 
 ## 자동 실행 규칙
 - 규칙 1: `depends_on`이 완료된 문서/카드만 실행한다.
