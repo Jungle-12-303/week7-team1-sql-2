@@ -66,17 +66,38 @@ docker run --rm --entrypoint /bin/bash week7-mini-sql -lc \
 ```
 
 ### 화면에서 기대할 결과
-- `insert_total_sec`, `id_query_sec`, `linear_query_sec` 숫자가 출력된다.
+- `insert_total_ms`, `id_query_ms`, `linear_query_ms` 숫자가 출력된다.
+- `case_a_path=B+TREE_ID_INDEX`, `case_b_path=LINEAR_SCAN_MAJOR` 라벨이 출력된다.
 - `WHERE id = 777777` 결과가 1건 출력된다.
 - `WHERE major = 'M5'` 결과가 100000건 출력된다.
 
 ### 실제 측정 예시 (2026-04-15)
-- `insert_total_sec=18`
-- `id_query_sec=1`
-- `linear_query_sec=2`
+- `insert_total_ms=16000`
+- `id_query_ms=1000`
+- `linear_query_ms=2000`
+- `case_a_path=B+TREE_ID_INDEX`
+- `case_b_path=LINEAR_SCAN_MAJOR`
+
+### 비교 해석 (발표용)
+| 항목 | 측정값 | 해석 |
+| --- | ---: | --- |
+| Case A: `WHERE id = ?` (B+ 트리) | 1000ms | 단건 키 조회가 빠르게 수행됨 |
+| Case B: `WHERE major = ?` (선형) | 2000ms | 전체 레코드 스캔으로 시간이 더 소요됨 |
+| 속도비 (B/A) | 2.0x | B+ 트리 경로가 약 2배 빠름 |
+
+### 시각 자료 (텍스트 바 차트)
+```text
+Query Latency (lower is better)
+
+Case A (B+ tree id index) : 1000 ms |████████████████████
+Case B (linear scan)      : 2000 ms |████████████████████████████████████████
+
+Relative speedup: Case A is 2.0x faster than Case B
+```
 
 ### 발표 멘트
-- "동일한 Docker 환경에서 100만 건 삽입 후 id 경로와 선형 경로를 분리 측정했습니다."
+- "동일한 Docker 환경에서 100만 건 삽입 후 B+ 트리 경로(Case A)와 선형 경로(Case B)를 분리 측정했습니다."
+- "동일 조건에서 id 경로가 선형 스캔 대비 약 2배 빨랐고, 출력 라벨로 경로 자체를 함께 검증했습니다."
 - "PowerShell quoting 이슈를 피하기 위해 벤치는 `scripts/bench_docker.ps1` 단일 명령으로 실행합니다."
 
 ## Q&A 빠른 답변

@@ -39,18 +39,21 @@ docker run --rm --entrypoint /bin/bash week7-mini-sql -lc \
 insert_total_ms=18012
 id_query_ms=1042
 linear_query_ms=2133
---- id result ---
+case_a_path=B+TREE_ID_INDEX
+case_b_path=LINEAR_SCAN_MAJOR
+
+--- case A result (B+ tree id index) ---
 | name    |
 +---------+
 | U777777 |
 +---------+
 (1 rows)
---- linear result ---
+--- case B result (linear scan) ---
 ...
 (100000 rows)
 ```
 
 - 2번에서 볼 것: `INSERT 1` 2회, `WHERE id = 2` 결과 1건
 - 3번에서 볼 것: `students.data`(바이너리), `students.data.text.bak`(텍스트 백업)
-- 4번에서 볼 것: `insert_total_ms`, `id_query_ms`, `linear_query_ms` 비교
+- 4번에서 볼 것: `insert_total_ms`, `id_query_ms`, `linear_query_ms`와 `case_a_path/case_b_path` 라벨 비교
 - 참고: PowerShell에서 `docker ... -lc "긴 문자열"` 형태는 quoting 깨짐으로 실패할 수 있으므로 `scripts/bench_docker.ps1`를 사용

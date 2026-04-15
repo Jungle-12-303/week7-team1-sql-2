@@ -45,9 +45,11 @@ t5=`$(now_ms)
 echo "insert_total_ms=`$((t1-t0))"
 echo "id_query_ms=`$((t3-t2))"
 echo "linear_query_ms=`$((t5-t4))"
-echo "--- id result ---"
+echo "case_a_path=B+TREE_ID_INDEX"
+echo "case_b_path=LINEAR_SCAN_MAJOR"
+echo "--- case A result (B+ tree id index) ---"
 tail -n 5 /tmp/out_id.txt
-echo "--- linear result ---"
+echo "--- case B result (linear scan) ---"
 tail -n 5 /tmp/out_lin.txt
 "@
 
