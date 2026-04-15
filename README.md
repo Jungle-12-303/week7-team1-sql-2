@@ -1,133 +1,281 @@
-# Week7 Mini SQL (Binary + Auto ID + B+ Tree Index)
+# B+ Tree Index Mini SQL
 
-이 프로젝트는 기존 텍스트 기반 `.data` 저장을 바이너리 포맷으로 전환하고,
-`INSERT` 시 자동 ID를 부여한 뒤 해당 ID를 메모리 기반 B+ 트리에 등록하여
-`WHERE id = ?`를 인덱스 경로로 빠르게 처리하도록 확장한 버전입니다.
+- 기존 Mini SQL 처리기에 `자동 ID`, `바이너리 저장`, `메모리 기반 B+ Tree 인덱스`를 결합한 프로젝트
+- `WHERE id = ?` 및 `WHERE id` 범위 조건을 인덱스 경로로 처리
+- 비인덱스 조건은 선형 탐색으로 처리
+- 1,000,000건 이상 데이터 기준 성능 비교 수행
 
-실행/검증 기준 환경은 Docker입니다.
+## 1. 서비스
 
-## 1. 목표와 범위
-- `.data` 텍스트 저장 -> 바이너리 저장 전환
-- `INSERT` 시 `id` 자동 부여
-- 자동 부여된 `id -> row_ref(byte offset)`를 B+ 트리에 등록
-- `WHERE id = ?` 및 `WHERE id >, >=, <, <= ?` 인덱스 조회 분기
-- 텍스트 데이터 자동 마이그레이션(일회성)
-- 테스트/벤치/데모 문서 반영
+### 1-1. 한 줄 설명
 
-## 2. 저장 포맷
-바이너리 레코드 포맷(v1):
-- `uint32 field_count`
-- 각 필드: `uint32 byte_length + raw bytes(UTF-8)`
+- `INSERT` 시 자동으로 ID를 부여하고, 해당 ID를 B+ Tree 인덱스에 등록해 `WHERE id = ?` 조회를 빠르게 처리하는 Mini SQL 엔진
 
-`row_ref`는 레코드 시작 바이트 오프셋입니다.
+### 1-2. 프로젝트 목표
 
-## 3. 실행 흐름
-- INSERT: `auto id 생성 -> binary append -> bptree_insert`
-- SELECT (`WHERE id = ?`): `index_find -> row_ref direct read`
-- SELECT (`WHERE id >, >=, <, <= ?`): `B+ 트리 리프 순회 -> row_ref direct read`
-- SELECT (그 외): 바이너리 파일 선형 스캔
+- 기존 SQL 처리기의 선형 탐색 기반 조회 구조 확장
+- `WHERE id = ?` 조건에서 인덱스 사용 가능하도록 개선
+- 대용량 데이터에서 인덱스 조회와 선형 탐색의 차이 검증
+- 기존 SQL 처리기와 인덱스 구조의 자연스러운 연결
 
-## 3-1. B+ 트리 인덱스
-- 구현 방식: 디스크 기반이 아닌 메모리 기반 B+ 트리
-- 키: `id(uint64_t)`
-- 값: `row_ref(byte offset)`
-- 리프 노드 분할 시 오른쪽 리프의 최소 키를 부모에 승격
-- 내부 노드 분할 시 중앙 키를 부모에 승격
-- 중복 ID는 삽입 거부
+### 1-3. 지원 기능
 
-## 4. 마이그레이션
-실행 시 `.data`가 텍스트 포맷으로 감지되면:
-1. `students.data.bin.tmp`에 바이너리 변환
-2. 기존 텍스트를 `students.data.text.bak`로 백업
-3. 바이너리 파일을 `students.data`로 교체
+- `INSERT`
+- `SELECT *`
+- `SELECT ... WHERE id = ?`
+- `SELECT ... WHERE id > ?`, `>= ?`, `< ?`, `<= ?`
+- `SELECT ... WHERE major = ?` 등 비인덱스 조건 조회
+- CLI 기반 SQL 입력 및 실행
+- 대량 데이터 삽입 및 성능 측정
 
-검증 스크립트:
-- `scripts/verify_migration.ps1`
+### 1-4. 데이터 저장 구조
+
+- `.data` 텍스트 포맷 대신 바이너리 row 포맷 사용
+- 각 row를 파일 내 `row offset`으로 직접 접근
+- B+ Tree에 `id -> row offset` 매핑 유지
+- 인덱스 조회 시 파일 전체를 순회하지 않고 row 위치로 직접 이동
+
+```text
+[Data File]
+row0 ----> byte offset 0
+row1 ----> byte offset 48
+row2 ----> byte offset 96
+
+[B+ Tree]
+1 -> 0
+2 -> 48
+3 -> 96
+```
+
+## 2. 파이프라인
+
+### 2-1. 전체 처리 흐름
+
+```mermaid
+flowchart LR
+    A["SQL Input"] --> B["Parser"]
+    B --> C["Executor"]
+    C --> D{"Query Type"}
+    D -->|INSERT| E["Auto ID Assignment"]
+    E --> F["Binary Row Append"]
+    F --> G["B+ Tree Index Update"]
+    D -->|SELECT WHERE id| H["B+ Tree Search"]
+    H --> I["Direct Row Read by Offset"]
+    D -->|SELECT other field| J["Linear Scan"]
+    I --> K["Result Output"]
+    J --> K
+```
+
+### 2-2. INSERT 파이프라인
+
+- SQL 입력
+- Parser에서 INSERT 구문 해석
+- Executor에서 다음 ID 생성
+- Storage에 바이너리 row append
+- append 결과로 `row offset` 획득
+- B+ Tree에 `(id, row offset)` 등록
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant P as Parser
+    participant E as Executor
+    participant S as Storage
+    participant B as B+ Tree
+
+    U->>P: INSERT INTO ...
+    P->>E: Parsed INSERT query
+    E->>E: Generate next id
+    E->>S: Append row in binary format
+    S-->>E: Return row offset
+    E->>B: Insert (id, row offset)
+    E-->>U: Insert success
+```
+
+### 2-3. SELECT 파이프라인
+
+- `WHERE id = ?` 또는 `WHERE id` 범위 조건이면 인덱스 경로 선택
+- B+ Tree에서 row offset 탐색
+- offset 기반 direct read 수행
+- 비인덱스 조건이면 전체 row 선형 탐색 수행
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant P as Parser
+    participant E as Executor
+    participant B as B+ Tree
+    participant S as Storage
+
+    U->>P: SELECT ... WHERE ...
+    P->>E: Parsed SELECT query
+    E->>E: Check predicate
+    alt WHERE id = ? or id range
+        E->>B: Search by id
+        B-->>E: row offset(s)
+        E->>S: Read row(s) by offset
+        S-->>E: row data
+    else Other predicates
+        E->>S: Scan all rows
+        S-->>E: matched rows
+    end
+    E-->>U: Query result
+```
+
+## 3. 핵심 구현 내용
+
+- 발표 시간이 짧을 경우 이론 설명 중심으로 진행
+- 시간이 남을 경우 코드 레벨 포인트까지 확장 설명
+
+### 3-1. INSERT 시 자동 ID 생성 및 인덱스 등록
+
+#### 이론
+
+- `INSERT` 실행 시 다음 ID 자동 생성
+- 생성된 ID를 포함한 row를 바이너리 포맷으로 저장
+- 저장 직후 row 시작 위치인 `row offset` 확보
+- `(id, row offset)`를 B+ Tree에 즉시 등록
+
+#### 코드 레벨 포인트
+
+- 자동 ID 생성 위치
+- 바이너리 row append 위치
+- append 이후 row offset 반환 지점
+- `bptree_insert(id, row_offset)` 호출 시점
+
+### 3-2. 인덱스 경로와 선형 탐색 경로 분리
+
+#### 이론
+
+- `WHERE id = ?`는 B+ Tree 인덱스 사용
+- `WHERE id >= ?`, `<= ?` 등 범위 조건은 leaf 순회 사용
+- `WHERE major = ?` 같은 조건은 선형 탐색 사용
+- 조건 종류에 따라 실행 경로를 분기
+
+#### 코드 레벨 포인트
+
+- 조건 컬럼이 `id`인지 판단하는 분기
+- 단건 조회와 범위 조회의 인덱스 진입 방식
+- 비인덱스 조건을 linear scan으로 처리하는 흐름
+
+### 3-3. B+ Tree 노드 구성 방식
+
+#### 이론
+
+- 내부 노드는 key와 child pointer 보유
+- 리프 노드는 key와 value(`row offset`) 보유
+- 리프 노드 간 연결을 통해 범위 조회 지원
+- 노드가 가득 차면 split 수행
+- split 결과를 부모 노드에 반영
+
+#### 컴포넌트 다이어그램
+
+```mermaid
+flowchart TD
+    A["CLI / SQL Input"] --> B["Parser"]
+    B --> C["Executor"]
+    C --> D["Storage Layer"]
+    C --> E["B+ Tree Index"]
+    D --> F["Binary .data File"]
+    E --> G["id -> row offset"]
+```
+
+#### B+ Tree 구조 예시
+
+```mermaid
+flowchart TD
+    R["Internal Node<br/>keys: 30, 70"]
+    L1["Leaf<br/>1, 10, 20"]
+    L2["Leaf<br/>30, 40, 60"]
+    L3["Leaf<br/>70, 80, 90"]
+
+    R --> L1
+    R --> L2
+    R --> L3
+    L1 --> L2
+    L2 --> L3
+```
+
+#### 코드 레벨 포인트
+
+- 노드 구조체 정의
+- leaf/internal 분기 방식
+- insert 시 split 발생 조건
+- range query에서 leaf link 순회 방식
+
+## 4. 시연
+
+### 4-1. CLI 기능 시연
+
+시연 순서
+1. `INSERT`로 레코드 추가
+2. `SELECT *`로 전체 데이터 확인
+3. `WHERE id = ?`로 단건 인덱스 조회
+4. `WHERE id >= ?` 또는 `WHERE id <= ?`로 범위 조회
+5. `WHERE major = ?`로 비인덱스 조건 조회
+
+예시 SQL
+
+```sql
+INSERT INTO demo.students (name, major, grade) VALUES ("Kim", "CS", "3");
+INSERT INTO demo.students (name, major, grade) VALUES ("Lee", "Math", "2");
+
+SELECT * FROM demo.students;
+SELECT name, major FROM demo.students WHERE id = 1;
+SELECT * FROM demo.students WHERE id >= 1;
+SELECT * FROM demo.students WHERE major = "CS";
+```
+
+### 4-2. CLI 예외 처리
+
+- 존재하지 않는 ID 조회
+- 잘못된 조건식 입력
+- 지원하지 않는 SQL 형식 입력
+
+### 4-3. 100만 건 데이터 기반 성능 비교
+
+- 데이터 수: `1,000,000`건 이상
+- 비교 A: `WHERE id = ?` -> B+ Tree 인덱스 사용
+- 비교 B: `WHERE major = ?` -> 선형 탐색 사용
+- 인덱스 경로와 선형 탐색 경로의 실행 시간 비교
+
+#### 측정 예시 결과
+
+| 항목 | 실행 시간 | 접근 경로 |
+| --- | ---: | --- |
+| `WHERE id = ?` | 540 ms | B+ Tree Index |
+| `WHERE major = ?` | 958 ms | Linear Scan |
+
+#### 해석 포인트
+
+- `WHERE id = ?`는 row 위치를 직접 찾기 때문에 조회 비용이 작음
+- `WHERE major = ?`는 전체 row 비교가 필요해 비용이 큼
+- 동일한 SELECT라도 조건에 따라 실행 경로가 달라짐
 
 ## 5. 테스트
-단위 테스트(`tests/test_runner.c`)에서 다음을 검증합니다.
-- 파서 INSERT/SELECT-WHERE 파싱
-- `index_init/index_insert/index_find`
-- 자동 ID 증가와 `WHERE id` 조회
-- `WHERE id >= ?`, `WHERE id <= ?` 범위 조회
-- 일반 조건 선형 스캔(`WHERE major = ?`)
-- 없는 id 조회 빈 결과
-- 텍스트->바이너리 마이그레이션 후 조회 일치
 
-실행:
-```bash
-docker build -t week7-mini-sql .
-```
+### 5-1. 단위 테스트
 
-`docker build` 단계에서 `make`와 `make test`가 함께 수행됩니다.
+- B+ Tree 삽입 검증
+- key 검색 검증
+- 범위 검색 검증
+- 노드 분할 이후 검색 정확성 검증
+- 존재하지 않는 key 조회 검증
 
-## 6. 벤치마크 (100만 건)
-벤치마크는 Docker 기준으로 실행합니다.
-실행 명령은 `docs/demo/demo_commands_only.md`의 "100만 건 벤치마크 (Docker)" 섹션을 사용하세요.
+### 5-2. 기능 테스트
 
-측정 항목:
-- Case A: `WHERE id = ?` (B+ 트리 인덱스)
-- Case B: `WHERE major = ?` (선형 탐색)
-- Case C: 텍스트 삽입 시뮬레이션 대비 바이너리 삽입 시간
+- `INSERT` 후 자동 ID 증가 검증
+- `SELECT *` 결과 검증
+- `WHERE id = ?` 동작 검증
+- `WHERE id` 범위 조건 동작 검증
+- `WHERE major = ?` 선형 탐색 동작 검증
 
-### 예시 결과 (2026-04-15)
-- `insert_total_ms=16000`
-- `id_query_ms=540`
-- `linear_query_ms=958`
-- `case_a_path=B+TREE_ID_INDEX`
-- `case_b_path=LINEAR_SCAN_MAJOR`
+### 5-3. 통합 관점 검증
 
-### A/B 비교 표
-| 항목 | 측정값 | 해석 |
-| --- | ---: | --- |
-| Case A: `WHERE id = ?` (B+ 트리) | 540ms | 단건 키 조회가 빠르게 수행됨 |
-| Case B: `WHERE major = ?` (선형) | 958ms | 전체 레코드 스캔으로 시간이 더 소요됨 |
-| 속도비 (B/A) | 1.77x | B+ 트리 경로가 약 1.77배 빠름 |
+- SQL 입력부터 파싱, 실행, 저장, 조회까지 전체 흐름 검증
+- 바이너리 저장 구조 전환 이후 결과 일관성 검증
+- 인덱스 경로와 비인덱스 경로의 분기 동작 검증
 
-### 시각 자료 (텍스트 바 차트)
-```text
-Query Latency (lower is better)
+## 6. 소감
 
-Case A (B+ tree id index) :  540 ms |#######################
-Case B (linear scan)      :  958 ms |########################################
-
-Relative speedup: Case A is about 1.77x faster than Case B
-```
-
-## 7. 실행 방법
-빌드:
-```bash
-docker build -t week7-mini-sql .
-```
-
-인터랙티브 모드:
-```bash
-docker run -it --rm week7-mini-sql
-```
-
-프롬프트에서 SQL을 직접 입력:
-```sql
-SELECT * FROM demo.students;
-SELECT name, grade FROM demo.students WHERE id = 2;
-```
-
-파일 실행 모드(기존 방식):
-```bash
-docker run --rm week7-mini-sql examples/db examples/sql/demo_workflow.sql
-```
-
-## 8. 4분 데모 스크립트 + Q&A
-데모(4분):
-- 0:00~0:40: 문제/목표(텍스트->바이너리, 자동ID, B+ 트리 인덱스)
-- 0:40~1:20: 저장 포맷과 B+ 트리 인덱스 설명
-- 1:20~2:20: INSERT + WHERE id + WHERE major 시연
-- 2:20~3:20: 테스트/마이그레이션 검증
-- 3:20~4:00: 벤치 결과 요약
-
-Q&A(예상):
-1. 왜 `id`만 인덱스 최적화했나?
-- 과제 핵심 경로를 먼저 확실히 검증하기 위해서입니다.
-2. 인덱스 실패 시 처리?
-- 오류를 반환하고 질의는 실패 처리합니다.
-3. 텍스트 대비 바이너리 장점?
-- 파싱 비용 감소, row_ref 기반 직접 접근, 인덱스 경로 성능 개선.
+- 추후 작성 예정
