@@ -20,19 +20,28 @@ sequenceDiagram
     participant RSI as run_select_by_id (storage.c)
     participant IF as index_find (bptree.c)
     participant BF as bpt_find (bptree.c)
+    participant AR as append_row_by_ref (storage.c)
     participant BR as binary_reader_read_row_at (storage.c)
     participant QR as query_result_append_row (storage.c)
 
     RSI->>IF: index_find(id, &ref)
     IF->>BF: bpt_find(g_index_root, id, out_ref)
-    Note over BF: internal node while 탐색\nnode = children[i] 반복
+
+    Note over BF: internal node while 탐색\nnode = children[i]로 하강
     Note over BF: leaf node for 순회\nkey 일치 시 *out_ref = row_ref
+
     BF-->>IF: return 0 (found)
-    IF-->>RSI: ref가 채워진 상태로 복귀
-    RSI->>BR: binary_reader_read_row_at(ref, &row_values)
-    BR-->>RSI: row_values
-    RSI->>QR: query_result_append_row(out, &row_values)
-    QR-->>RSI: success
+    IF-->>RSI: return 0, ref 채워짐
+
+    RSI->>AR: append_row_by_ref(ref, out)
+    AR->>BR: binary_reader_read_row_at(ref, &row_values)
+    BR-->>AR: row_values
+    AR->>QR: query_result_append_row(out, &row_values, ...)
+    QR-->>AR: success
+    AR-->>RSI: return 0
+
+    Note over RSI: 최종적으로 out(QueryResult)에 row 1건 추가됨
+
 ```
 
 
@@ -91,3 +100,7 @@ flowchart LR
 
     LEFT -. promoted key 40 .-> RIGHT
 ```
+
+
+# 오류 분기 처리
+
