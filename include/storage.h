@@ -56,6 +56,7 @@ uint64_t next_id(void);
 int index_init(void);
 int index_insert(uint64_t id, RowRef ref);
 int index_find(uint64_t id, RowRef *out_ref);
+bool index_is_ready(void);
 int binary_writer_append_row(const StringList *values, RowRef *out_ref);
 int binary_reader_read_row_at(RowRef ref, StringList *out_values);
 int binary_reader_scan_all(RowCallback cb, void *ctx);
