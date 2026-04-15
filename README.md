@@ -42,14 +42,28 @@
   "theme": "base",
   "themeVariables": {
     "background": "#ffffff",
-    "primaryColor": "#f8fafc",
-    "primaryTextColor": "#111827",
-    "primaryBorderColor": "#334155",
-    "lineColor": "#475569",
-    "secondaryColor": "#f1f5f9",
-    "secondaryTextColor": "#111827",
-    "tertiaryColor": "#e2e8f0",
-    "tertiaryTextColor": "#111827"
+    "primaryColor": "#ffffff",
+    "primaryTextColor": "#111111",
+    "primaryBorderColor": "#111111",
+    "lineColor": "#111111",
+    "secondaryColor": "#ffffff",
+    "secondaryTextColor": "#111111",
+    "tertiaryColor": "#f3f4f6",
+    "tertiaryTextColor": "#111111",
+    "actorBkg": "#ffffff",
+    "actorBorder": "#111111",
+    "actorTextColor": "#111111",
+    "signalColor": "#111111",
+    "signalTextColor": "#111111",
+    "labelBoxBkgColor": "#ffffff",
+    "labelBoxBorderColor": "#111111",
+    "labelTextColor": "#111111",
+    "loopTextColor": "#111111",
+    "noteBkgColor": "#ffffff",
+    "noteBorderColor": "#111111",
+    "noteTextColor": "#111111",
+    "activationBorderColor": "#111111",
+    "activationBkgColor": "#e5e7eb"
   }
 }}%%
 flowchart TD

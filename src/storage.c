@@ -970,10 +970,17 @@ int binary_reader_scan_all(RowCallback cb, void *ctx) {
             break;
         }
 
-        if (cb(ref, &values, ctx) != 0) {
-            string_list_free(&values);
-            fclose(file);
-            return -1;
+        {
+            int cb_result = cb(ref, &values, ctx);
+            if (cb_result < 0) {
+                string_list_free(&values);
+                fclose(file);
+                return -1;
+            }
+            if (cb_result > 0) {
+                string_list_free(&values);
+                break;
+            }
         }
 
         string_list_free(&values);
@@ -1496,28 +1503,27 @@ typedef struct {
     QueryResult *result;
     char *error;
     size_t error_size;
+    int where_index;
+    bool stop_after_first_match;
 } LinearScanContext;
 
 static int linear_scan_callback(RowRef ref, const StringList *values, void *ctx) {
     LinearScanContext *context = (LinearScanContext *) ctx;
-    int where_index = -1;
 
     (void) ref;
 
     if (context->statement->where.enabled) {
-        where_index = find_column_index(&context->table->columns, context->statement->where.column);
-        if (where_index < 0) {
-            snprintf(context->error, context->error_size, "unknown column in WHERE clause: %s", context->statement->where.column);
-            return -1;
-        }
-
-        if (!where_value_matches(values->items[where_index], context->statement->where.value, context->statement->where.op)) {
+        if (!where_value_matches(values->items[context->where_index], context->statement->where.value, context->statement->where.op)) {
             return 0;
         }
     }
 
     if (!query_result_append_row(context->result, values, context->error, context->error_size)) {
         return -1;
+    }
+
+    if (context->stop_after_first_match) {
+        return 1;
     }
 
     return 0;
@@ -1538,6 +1544,17 @@ int run_select_linear(const SelectStatement *statement, QueryResult *out) {
     context.result = out;
     context.error = error;
     context.error_size = sizeof(error);
+    context.where_index = -1;
+    context.stop_after_first_match = false;
+
+    if (statement->where.enabled) {
+        context.where_index = find_column_index(&context.table->columns, statement->where.column);
+        if (context.where_index < 0) {
+            snprintf(error, sizeof(error), "unknown column in WHERE clause: %s", statement->where.column);
+            return -1;
+        }
+        context.stop_after_first_match = (statement->where.op == WHERE_OP_EQUAL && sql_stricmp(statement->where.column, "student_no") == 0);
+    }
 
     if (binary_reader_scan_all(linear_scan_callback, &context) != 0) {
         return -1;

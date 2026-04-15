@@ -1,27 +1,95 @@
 param(
+    [ValidateSet("prepare", "query")]
+    [string]$Mode = "query",
     [int]$Rows = 1000000,
     [int]$Runs = 5,
     [int]$QueryRepeats = 30,
-    [string]$Image = "week7-mini-sql",
-    [switch]$PrepareOnly
+    [switch]$ForceRebuild,
+    [string]$Image = "week7-mini-sql"
 )
 
 $ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $PSScriptRoot
 $tmpDir = Join-Path $root "tests\tmp"
+$cacheRoot = Join-Path $tmpDir "bench_cache\$Rows\demo"
+$schemaPath = Join-Path $cacheRoot "students.schema"
+$dataPath = Join-Path $cacheRoot "students.data"
 $shPath = Join-Path $tmpDir "bench_1m_demo.sh"
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 
 New-Item -ItemType Directory -Force $tmpDir | Out-Null
 
-$scriptTemplate = @'
+function New-BenchmarkDatasetBinary {
+    param(
+        [string]$SchemaPath,
+        [string]$DataPath,
+        [int]$Rows
+    )
+
+    New-Item -ItemType Directory -Force (Split-Path -Parent $SchemaPath) | Out-Null
+    [System.IO.File]::WriteAllText($SchemaPath, "id|student_no|name", $utf8NoBom)
+
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    $fs = [System.IO.File]::Open($DataPath, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+    try {
+        $buffered = New-Object System.IO.BufferedStream($fs, 1048576)
+        $writer = New-Object System.IO.BinaryWriter($buffered, [System.Text.Encoding]::UTF8)
+        try {
+            for ($i = 1; $i -le $Rows; $i++) {
+                $id = $i.ToString()
+                $studentNo = (2026000000 + $i).ToString()
+                $name = "U$i"
+
+                $idBytes = [System.Text.Encoding]::UTF8.GetBytes($id)
+                $studentNoBytes = [System.Text.Encoding]::UTF8.GetBytes($studentNo)
+                $nameBytes = [System.Text.Encoding]::UTF8.GetBytes($name)
+
+                $writer.Write([uint32]3)
+
+                $writer.Write([uint32]$idBytes.Length)
+                $writer.Write($idBytes)
+
+                $writer.Write([uint32]$studentNoBytes.Length)
+                $writer.Write($studentNoBytes)
+
+                $writer.Write([uint32]$nameBytes.Length)
+                $writer.Write($nameBytes)
+            }
+            $writer.Flush()
+            $buffered.Flush()
+        } finally {
+            $writer.Dispose()
+            $buffered.Dispose()
+        }
+    } finally {
+        $fs.Dispose()
+    }
+
+    $sw.Stop()
+    $size = (Get-Item $DataPath).Length
+    Write-Host "Prepare completed"
+    Write-Host ("rows={0}" -f $Rows)
+    Write-Host ("prepare_mode=binary_writer")
+    Write-Host ("prepare_total_ms={0}" -f [int][Math]::Round($sw.Elapsed.TotalMilliseconds))
+    Write-Host ("cache_dir={0}" -f (Split-Path -Parent $SchemaPath))
+    Write-Host ("data_size_bytes={0}" -f $size)
+}
+
+function Invoke-QueryBenchmarkDocker {
+    param(
+        [int]$Rows,
+        [int]$Runs,
+        [int]$QueryRepeats,
+        [string]$Image
+    )
+
+    $scriptTemplate = @'
 set -euo pipefail
 
 ROWS=__ROWS__
 RUNS=__RUNS__
 QUERY_REPEATS=__QUERY_REPEATS__
-PREPARE_ONLY=__PREPARE_ONLY__
 
 WORK_ROOT=/work/tests/tmp
 CACHE_DIR="$WORK_ROOT/bench_cache/$ROWS"
@@ -29,23 +97,17 @@ BENCH_DIR=/tmp/bench
 
 mkdir -p "$BENCH_DIR/demo" /tmp/sql
 
+if [ ! -f "$CACHE_DIR/demo/students.schema" ] || [ ! -f "$CACHE_DIR/demo/students.data" ]; then
+  echo "Cache not found: $CACHE_DIR/demo"
+  echo "Run prepare first: .\scripts\bench_docker.ps1 -Mode prepare -Rows $ROWS"
+  exit 1
+fi
+
+cp "$CACHE_DIR/demo/students.schema" "$BENCH_DIR/demo/students.schema"
+cp "$CACHE_DIR/demo/students.data" "$BENCH_DIR/demo/students.data"
+
 now_ms() {
   date +%s%3N
-}
-
-avg_ms() {
-  awk '{sum+=$1; n+=1} END { if (n==0) print "0.000"; else printf "%.3f", sum/n }' "$1"
-}
-
-p95_ms() {
-  file="$1"
-  n=$(wc -l < "$file")
-  if [ "$n" -le 0 ]; then
-    echo "0.000"
-    return
-  fi
-  idx=$(( (n * 95 + 99) / 100 ))
-  sort -n "$file" | sed -n "${idx}p"
 }
 
 emit_repeated_query_file() {
@@ -58,39 +120,8 @@ emit_repeated_query_file() {
   done
 }
 
-for i in $(seq 1 "$ROWS"); do
-  student_no=$((2026000000 + i))
-  grade=$(( (i % 4) + 1 ))
-  printf "INSERT INTO demo.students (student_no, name, major, grade) VALUES ('%s', 'U%s', 'M%s', '%s');\n" "$student_no" "$i" "$((i%10))" "$grade"
-done > /tmp/sql/insert.sql
-
 prepare_mode="cache_reused"
 insert_ms=0
-
-if [ -f "$CACHE_DIR/demo/students.schema" ] && [ -f "$CACHE_DIR/demo/students.data" ]; then
-  cp "$CACHE_DIR/demo/students.schema" "$BENCH_DIR/demo/students.schema"
-  cp "$CACHE_DIR/demo/students.data" "$BENCH_DIR/demo/students.data"
-else
-  prepare_mode="fresh_insert"
-  echo "id|student_no|name|major|grade" > "$BENCH_DIR/demo/students.schema"
-  : > "$BENCH_DIR/demo/students.data"
-  t0=$(now_ms)
-  /app/build/mini_sql "$BENCH_DIR" /tmp/sql/insert.sql >/tmp/out_insert.txt
-  t1=$(now_ms)
-  insert_ms=$((t1-t0))
-  mkdir -p "$CACHE_DIR/demo"
-  cp "$BENCH_DIR/demo/students.schema" "$CACHE_DIR/demo/students.schema"
-  cp "$BENCH_DIR/demo/students.data" "$CACHE_DIR/demo/students.data"
-fi
-
-if [ "$PREPARE_ONLY" -eq 1 ]; then
-  echo "Prepare completed"
-  echo "rows=$ROWS"
-  echo "prepare_mode=$prepare_mode"
-  echo "insert_total_ms=$insert_ms"
-  echo "cache_dir=$CACHE_DIR"
-  exit 0
-fi
 
 echo
 echo "============================================================"
@@ -100,8 +131,8 @@ echo "Rows: $ROWS / Runs(batch groups) per case: $RUNS / Query repeats per group
 echo "Insert Total: ${insert_ms} ms"
 echo "Dataset Source: ${prepare_mode} (cache: $CACHE_DIR)"
 echo
-printf "%-10s | %-14s | %-19s | %-19s | %-8s\n" "Target ID" "Target Name" "ID Index avg/p95" "StudentNo avg/p95" "Speedup"
-echo "-----------+----------------+---------------------+---------------------+---------"
+printf "%-10s | %-14s | %-13s | %-13s | %-8s\n" "Target ID" "Target Name" "ID Index ms" "StudentNo ms" "Speedup"
+echo "-----------+----------------+---------------+---------------+---------"
 
 for target in 1 500000 1000000; do
   if [ "$target" -gt "$ROWS" ]; then
@@ -131,32 +162,42 @@ for target in 1 500000 1000000; do
 
   id_avg=$(awk -v total_ms="$id_total_ms" -v repeats="$case_queries" 'BEGIN { if (repeats<=0) print "0.000"; else printf "%.3f", total_ms / repeats }')
   student_avg=$(awk -v total_ms="$student_total_ms" -v repeats="$case_queries" 'BEGIN { if (repeats<=0) print "0.000"; else printf "%.3f", total_ms / repeats }')
-  id_p95="n/a"
-  student_p95="n/a"
   speedup=$(awk -v a="$id_avg" -v b="$student_avg" 'BEGIN { if (a <= 0.0001) print "0.00x"; else printf "%.2fx", b/a }')
 
-  id_cell="${id_avg}/${id_p95}"
-  student_cell="${student_avg}/${student_p95}"
-  printf "%-10s | %-14s | %-19s | %-19s | %-8s\n" "$target" "$target_name" "$id_cell" "$student_cell" "$speedup"
+  printf "%-10s | %-14s | %-13s | %-13s | %-8s\n" "$target" "$target_name" "$id_avg" "$student_avg" "$speedup"
 done
 
 echo
 echo "Legend:"
-echo "- ID Index: WHERE id = ? (B+Tree), per-query avg in one process"
-echo "- StudentNo: WHERE student_no = ? (Linear Scan), per-query avg in one process"
-echo "- Speedup: StudentNo avg / ID avg"
+echo "- ID Index: WHERE id = ? (B+Tree), per-query average ms"
+echo "- StudentNo: WHERE student_no = ? (Linear Scan), per-query average ms"
+echo "- Speedup: StudentNo ms / ID Index ms"
 echo "- Measurement: each case runs one mini_sql process; repeated count = RUNS x QUERY_REPEATS"
 echo "============================================================"
 '@
 
-$script = $scriptTemplate.
-    Replace("__ROWS__", $Rows.ToString()).
-    Replace("__RUNS__", $Runs.ToString()).
-    Replace("__QUERY_REPEATS__", $QueryRepeats.ToString()).
-    Replace("__PREPARE_ONLY__", $(if ($PrepareOnly) { "1" } else { "0" }))
-# Force LF line endings for bash script to avoid `set: pipefail` errors from CRLF.
-$script = $script.Replace("`r`n", "`n")
-[System.IO.File]::WriteAllText($shPath, $script, $utf8NoBom)
+    $script = $scriptTemplate.
+        Replace("__ROWS__", $Rows.ToString()).
+        Replace("__RUNS__", $Runs.ToString()).
+        Replace("__QUERY_REPEATS__", $QueryRepeats.ToString())
+    $script = $script.Replace("`r`n", "`n")
+    [System.IO.File]::WriteAllText($shPath, $script, $utf8NoBom)
 
-$wd = (Get-Location).Path
-docker run --rm -v "${wd}:/work" --entrypoint /bin/bash $Image -lc "bash /work/tests/tmp/bench_1m_demo.sh"
+    $wd = (Get-Location).Path
+    docker run --rm -v "${wd}:/work" --entrypoint /bin/bash $Image -lc "bash /work/tests/tmp/bench_1m_demo.sh"
+}
+
+if ($Mode -eq "prepare") {
+    if ((-not $ForceRebuild.IsPresent) -and (Test-Path $dataPath) -and (Test-Path $schemaPath) -and ((Get-Item $dataPath).Length -gt 0)) {
+        Write-Host "Prepare skipped: cache already exists."
+        Write-Host ("rows={0}" -f $Rows)
+        Write-Host ("cache_dir={0}" -f $cacheRoot)
+        Write-Host ("data_size_bytes={0}" -f (Get-Item $dataPath).Length)
+        exit 0
+    }
+
+    New-BenchmarkDatasetBinary -SchemaPath $schemaPath -DataPath $dataPath -Rows $Rows
+    exit 0
+}
+
+Invoke-QueryBenchmarkDocker -Rows $Rows -Runs $Runs -QueryRepeats $QueryRepeats -Image $Image

@@ -1,14 +1,20 @@
-﻿#include "executor.h"
+﻿#if !defined(_WIN32) && !defined(_POSIX_C_SOURCE)
+#define _POSIX_C_SOURCE 200809L
+#endif
+
+#include "executor.h"
 #include "parser.h"
 
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #if defined(_WIN32)
 #include <conio.h>
 #include <io.h>
+#include <windows.h>
 #else
 #include <termios.h>
 #include <unistd.h>
@@ -86,6 +92,16 @@ static bool contains_text_ci(const char *text, const char *pattern) {
     return false;
 }
 
+static long long current_time_ms(void) {
+#if defined(_WIN32)
+    return (long long) GetTickCount64();
+#else
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (long long) ts.tv_sec * 1000LL + (long long) ts.tv_nsec / 1000000LL;
+#endif
+}
+
 static const char *error_hint_ko(const char *error) {
     if (contains_text_ci(error, "unknown option")) {
         return "지원하지 않는 옵션입니다. -h/--help로 사용 가능한 옵션을 확인해 주세요.";
@@ -161,6 +177,8 @@ static void print_usage(void) {
 static bool execute_source_text(const char *db_root, const char *source, char *error, size_t error_size) {
     SQLScript script;
     size_t index;
+    const char *timing_env = getenv("MINI_SQL_BENCH_TIMING");
+    bool emit_timing = (timing_env != NULL && timing_env[0] != '\0' && strcmp(timing_env, "0") != 0);
 
     memset(&script, 0, sizeof(script));
 
@@ -170,7 +188,11 @@ static bool execute_source_text(const char *db_root, const char *source, char *e
 
     for (index = 0; index < script.count; ++index) {
         ExecutionResult result;
+        long long start_ms;
+        long long end_ms;
         memset(&result, 0, sizeof(result));
+
+        start_ms = current_time_ms();
 
         if (!execute_statement(&script.items[index], db_root, &result, error, error_size)) {
             free_execution_result(&result);
@@ -178,7 +200,12 @@ static bool execute_source_text(const char *db_root, const char *source, char *e
             return false;
         }
 
+        end_ms = current_time_ms();
+
         print_execution_result(&result, stdout);
+        if (emit_timing) {
+            fprintf(stdout, "__BENCH_STMT_MS__=%lld\n", (end_ms - start_ms));
+        }
         if (result.kind == EXECUTION_SELECT && result.query_result.row_count == 0) {
             puts("안내: 조회 결과가 0건입니다. 조건값(특히 id 범위) 또는 데이터 존재 여부를 확인해 주세요.");
         }
@@ -860,3 +887,4 @@ int main(int argc, char **argv) {
     free(source);
     return 0;
 }
+
