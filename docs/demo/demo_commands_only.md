@@ -20,6 +20,14 @@ docker run --rm --entrypoint /bin/bash week7-mini-sql -lc \
 ```
 
 ```powershell
+# 0-1) mini_sql Docker 실행 (예제 SQL 즉시 실행)
+docker run --rm week7-mini-sql /app/examples/db /app/examples/sql/demo_workflow.sql
+
+# 0-2) mini_sql Docker CLI 실행 (interactive)
+docker run -it --rm week7-mini-sql /app/examples/db -i
+```
+
+```powershell
 # 4) 100만 건 벤치마크 (PowerShell/Docker)
 .\scripts\bench_docker.ps1
 ```

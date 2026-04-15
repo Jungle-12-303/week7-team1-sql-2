@@ -11,6 +11,17 @@
 - 터미널은 Docker가 가능한 환경에서 실행한다.
 - 현재 폴더는 프로젝트 루트(`Week7`)여야 한다.
 
+## mini_sql 실행(Docker)
+### 명령어
+```bash
+docker run --rm week7-mini-sql /app/examples/db /app/examples/sql/demo_workflow.sql
+```
+
+### CLI(인터랙티브)로 실행
+```bash
+docker run -it --rm week7-mini-sql /app/examples/db -i
+```
+
 ## 1단계: 이미지 빌드 + 내부 테스트 통과 확인
 ### 명령어
 ```bash
