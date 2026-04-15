@@ -514,9 +514,9 @@ flowchart LR
     "primaryTextColor": "#111111",
     "primaryBorderColor": "#111111",
     "lineColor": "#111111",
-    "secondaryColor": "#f3f4f6",
+    "secondaryColor": "#dcfce7",
     "secondaryTextColor": "#111111",
-    "tertiaryColor": "#e5e7eb",
+    "tertiaryColor": "#bbf7d0",
     "tertiaryTextColor": "#111111"
   }
 }}%%
