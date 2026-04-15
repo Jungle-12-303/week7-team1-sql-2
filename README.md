@@ -41,15 +41,15 @@
 %%{init: {
   "theme": "base",
   "themeVariables": {
-    "background": "#0b1020",
-    "primaryColor": "#111827",
-    "primaryTextColor": "#f9fafb",
-    "primaryBorderColor": "#f9fafb",
-    "lineColor": "#e5e7eb",
-    "secondaryColor": "#1f2937",
-    "secondaryTextColor": "#f9fafb",
-    "tertiaryColor": "#111827",
-    "tertiaryTextColor": "#f9fafb"
+    "background": "#ffffff",
+    "primaryColor": "#f8fafc",
+    "primaryTextColor": "#111827",
+    "primaryBorderColor": "#334155",
+    "lineColor": "#475569",
+    "secondaryColor": "#f1f5f9",
+    "secondaryTextColor": "#111827",
+    "tertiaryColor": "#e2e8f0",
+    "tertiaryTextColor": "#111827"
   }
 }}%%
 flowchart TD
@@ -106,15 +106,15 @@ flowchart TD
 %%{init: {
   "theme": "base",
   "themeVariables": {
-    "background": "#0b1020",
-    "primaryColor": "#111827",
-    "primaryTextColor": "#f9fafb",
-    "primaryBorderColor": "#f9fafb",
-    "lineColor": "#e5e7eb",
-    "secondaryColor": "#1f2937",
-    "secondaryTextColor": "#f9fafb",
-    "tertiaryColor": "#111827",
-    "tertiaryTextColor": "#f9fafb"
+    "background": "#ffffff",
+    "primaryColor": "#f8fafc",
+    "primaryTextColor": "#111827",
+    "primaryBorderColor": "#334155",
+    "lineColor": "#475569",
+    "secondaryColor": "#f1f5f9",
+    "secondaryTextColor": "#111827",
+    "tertiaryColor": "#e2e8f0",
+    "tertiaryTextColor": "#111827"
   }
 }}%%
 flowchart LR
@@ -131,15 +131,15 @@ Leaf -> Binary Row 매핑
 %%{init: {
   "theme": "base",
   "themeVariables": {
-    "background": "#0b1020",
-    "primaryColor": "#111827",
-    "primaryTextColor": "#f9fafb",
-    "primaryBorderColor": "#f9fafb",
-    "lineColor": "#e5e7eb",
-    "secondaryColor": "#1f2937",
-    "secondaryTextColor": "#f9fafb",
-    "tertiaryColor": "#111827",
-    "tertiaryTextColor": "#f9fafb"
+    "background": "#ffffff",
+    "primaryColor": "#f8fafc",
+    "primaryTextColor": "#111827",
+    "primaryBorderColor": "#334155",
+    "lineColor": "#475569",
+    "secondaryColor": "#f1f5f9",
+    "secondaryTextColor": "#111827",
+    "tertiaryColor": "#e2e8f0",
+    "tertiaryTextColor": "#111827"
   }
 }}%%
 flowchart TD
@@ -209,15 +209,15 @@ flowchart TD
 %%{init: {
   "theme": "base",
   "themeVariables": {
-    "background": "#0b1020",
-    "primaryColor": "#111827",
-    "primaryTextColor": "#f9fafb",
-    "primaryBorderColor": "#f9fafb",
-    "lineColor": "#e5e7eb",
-    "secondaryColor": "#1f2937",
-    "secondaryTextColor": "#f9fafb",
-    "tertiaryColor": "#0f172a",
-    "tertiaryTextColor": "#f9fafb"
+    "background": "#ffffff",
+    "primaryColor": "#f8fafc",
+    "primaryTextColor": "#111827",
+    "primaryBorderColor": "#334155",
+    "lineColor": "#475569",
+    "secondaryColor": "#f1f5f9",
+    "secondaryTextColor": "#111827",
+    "tertiaryColor": "#e2e8f0",
+    "tertiaryTextColor": "#111827"
   }
 }}%%
 flowchart LR
@@ -252,29 +252,29 @@ flowchart LR
 %%{init: {
   "theme": "base",
   "themeVariables": {
-    "background": "#0b1020",
-    "primaryColor": "#111827",
-    "primaryTextColor": "#f9fafb",
-    "primaryBorderColor": "#f9fafb",
-    "lineColor": "#e5e7eb",
-    "secondaryColor": "#1f2937",
-    "secondaryTextColor": "#f9fafb",
-    "tertiaryColor": "#111827",
-    "tertiaryTextColor": "#f9fafb",
-    "actorBkg": "#111827",
-    "actorBorder": "#f9fafb",
-    "actorTextColor": "#f9fafb",
-    "signalColor": "#e5e7eb",
-    "signalTextColor": "#f9fafb",
-    "labelBoxBkgColor": "#111827",
-    "labelBoxBorderColor": "#f9fafb",
-    "labelTextColor": "#f9fafb",
-    "loopTextColor": "#f9fafb",
-    "noteBkgColor": "#1f2937",
-    "noteBorderColor": "#f9fafb",
-    "noteTextColor": "#f9fafb",
-    "activationBorderColor": "#f9fafb",
-    "activationBkgColor": "#1d4ed8"
+    "background": "#ffffff",
+    "primaryColor": "#f8fafc",
+    "primaryTextColor": "#111827",
+    "primaryBorderColor": "#334155",
+    "lineColor": "#475569",
+    "secondaryColor": "#f1f5f9",
+    "secondaryTextColor": "#111827",
+    "tertiaryColor": "#e2e8f0",
+    "tertiaryTextColor": "#111827",
+    "actorBkg": "#f8fafc",
+    "actorBorder": "#334155",
+    "actorTextColor": "#111827",
+    "signalColor": "#334155",
+    "signalTextColor": "#111827",
+    "labelBoxBkgColor": "#ffffff",
+    "labelBoxBorderColor": "#334155",
+    "labelTextColor": "#111827",
+    "loopTextColor": "#111827",
+    "noteBkgColor": "#eff6ff",
+    "noteBorderColor": "#334155",
+    "noteTextColor": "#111827",
+    "activationBorderColor": "#334155",
+    "activationBkgColor": "#dbeafe"
   }
 }}%%
 sequenceDiagram
@@ -304,29 +304,29 @@ sequenceDiagram
 %%{init: {
   "theme": "base",
   "themeVariables": {
-    "background": "#0b1020",
-    "primaryColor": "#111827",
-    "primaryTextColor": "#f9fafb",
-    "primaryBorderColor": "#f9fafb",
-    "lineColor": "#e5e7eb",
-    "secondaryColor": "#1f2937",
-    "secondaryTextColor": "#f9fafb",
-    "tertiaryColor": "#111827",
-    "tertiaryTextColor": "#f9fafb",
-    "actorBkg": "#111827",
-    "actorBorder": "#f9fafb",
-    "actorTextColor": "#f9fafb",
-    "signalColor": "#e5e7eb",
-    "signalTextColor": "#f9fafb",
-    "labelBoxBkgColor": "#111827",
-    "labelBoxBorderColor": "#f9fafb",
-    "labelTextColor": "#f9fafb",
-    "loopTextColor": "#f9fafb",
-    "noteBkgColor": "#1f2937",
-    "noteBorderColor": "#f9fafb",
-    "noteTextColor": "#f9fafb",
-    "activationBorderColor": "#f9fafb",
-    "activationBkgColor": "#166534"
+    "background": "#ffffff",
+    "primaryColor": "#f8fafc",
+    "primaryTextColor": "#111827",
+    "primaryBorderColor": "#334155",
+    "lineColor": "#475569",
+    "secondaryColor": "#f1f5f9",
+    "secondaryTextColor": "#111827",
+    "tertiaryColor": "#e2e8f0",
+    "tertiaryTextColor": "#111827",
+    "actorBkg": "#f8fafc",
+    "actorBorder": "#334155",
+    "actorTextColor": "#111827",
+    "signalColor": "#334155",
+    "signalTextColor": "#111827",
+    "labelBoxBkgColor": "#ffffff",
+    "labelBoxBorderColor": "#334155",
+    "labelTextColor": "#111827",
+    "loopTextColor": "#111827",
+    "noteBkgColor": "#eff6ff",
+    "noteBorderColor": "#334155",
+    "noteTextColor": "#111827",
+    "activationBorderColor": "#334155",
+    "activationBkgColor": "#dcfce7"
   }
 }}%%
 sequenceDiagram
@@ -374,15 +374,15 @@ sequenceDiagram
 %%{init: {
   "theme": "base",
   "themeVariables": {
-    "background": "#0b1020",
-    "primaryColor": "#111827",
-    "primaryTextColor": "#f9fafb",
-    "primaryBorderColor": "#f9fafb",
-    "lineColor": "#e5e7eb",
-    "secondaryColor": "#1f2937",
-    "secondaryTextColor": "#f9fafb",
-    "tertiaryColor": "#0f172a",
-    "tertiaryTextColor": "#f9fafb"
+    "background": "#ffffff",
+    "primaryColor": "#f8fafc",
+    "primaryTextColor": "#111827",
+    "primaryBorderColor": "#334155",
+    "lineColor": "#475569",
+    "secondaryColor": "#f1f5f9",
+    "secondaryTextColor": "#111827",
+    "tertiaryColor": "#e2e8f0",
+    "tertiaryTextColor": "#111827"
   }
 }}%%
 flowchart LR
@@ -410,15 +410,15 @@ flowchart LR
 %%{init: {
   "theme": "base",
   "themeVariables": {
-    "background": "#0b1020",
-    "primaryColor": "#111827",
-    "primaryTextColor": "#f9fafb",
-    "primaryBorderColor": "#f9fafb",
-    "lineColor": "#e5e7eb",
-    "secondaryColor": "#1f2937",
-    "secondaryTextColor": "#f9fafb",
-    "tertiaryColor": "#111827",
-    "tertiaryTextColor": "#f9fafb"
+    "background": "#ffffff",
+    "primaryColor": "#f8fafc",
+    "primaryTextColor": "#111827",
+    "primaryBorderColor": "#334155",
+    "lineColor": "#475569",
+    "secondaryColor": "#f1f5f9",
+    "secondaryTextColor": "#111827",
+    "tertiaryColor": "#e2e8f0",
+    "tertiaryTextColor": "#111827"
   }
 }}%%
 flowchart TD
@@ -474,15 +474,15 @@ flowchart TD
 %%{init: {
   "theme": "base",
   "themeVariables": {
-    "background": "#0b1020",
-    "primaryColor": "#111827",
-    "primaryTextColor": "#f9fafb",
-    "primaryBorderColor": "#f9fafb",
-    "lineColor": "#e5e7eb",
-    "secondaryColor": "#1f2937",
-    "secondaryTextColor": "#f9fafb",
-    "tertiaryColor": "#111827",
-    "tertiaryTextColor": "#f9fafb"
+    "background": "#ffffff",
+    "primaryColor": "#f8fafc",
+    "primaryTextColor": "#111827",
+    "primaryBorderColor": "#334155",
+    "lineColor": "#475569",
+    "secondaryColor": "#f1f5f9",
+    "secondaryTextColor": "#111827",
+    "tertiaryColor": "#e2e8f0",
+    "tertiaryTextColor": "#111827"
   }
 }}%%
 flowchart LR
@@ -503,15 +503,15 @@ flowchart LR
 %%{init: {
   "theme": "base",
   "themeVariables": {
-    "background": "#0b1020",
-    "primaryColor": "#111827",
-    "primaryTextColor": "#f9fafb",
-    "primaryBorderColor": "#f9fafb",
-    "lineColor": "#e5e7eb",
-    "secondaryColor": "#1f2937",
-    "secondaryTextColor": "#f9fafb",
-    "tertiaryColor": "#0f172a",
-    "tertiaryTextColor": "#f9fafb"
+    "background": "#ffffff",
+    "primaryColor": "#f8fafc",
+    "primaryTextColor": "#111827",
+    "primaryBorderColor": "#334155",
+    "lineColor": "#475569",
+    "secondaryColor": "#f1f5f9",
+    "secondaryTextColor": "#111827",
+    "tertiaryColor": "#e2e8f0",
+    "tertiaryTextColor": "#111827"
   }
 }}%%
 flowchart LR
@@ -543,26 +543,26 @@ VALUES ("Kim", "CS", "3");
 %%{init: {
   "theme": "base",
   "themeVariables": {
-    "background": "#0b1020",
-    "primaryColor": "#111827",
-    "primaryTextColor": "#f9fafb",
-    "primaryBorderColor": "#f9fafb",
-    "lineColor": "#e5e7eb",
-    "secondaryColor": "#1f2937",
-    "secondaryTextColor": "#f9fafb",
-    "tertiaryColor": "#111827",
-    "tertiaryTextColor": "#f9fafb",
-    "actorBkg": "#111827",
-    "actorBorder": "#f9fafb",
-    "actorTextColor": "#f9fafb",
-    "signalColor": "#e5e7eb",
-    "signalTextColor": "#f9fafb",
-    "labelBoxBkgColor": "#111827",
-    "labelBoxBorderColor": "#f9fafb",
-    "labelTextColor": "#f9fafb",
-    "noteBkgColor": "#1f2937",
-    "noteBorderColor": "#f9fafb",
-    "noteTextColor": "#f9fafb"
+    "background": "#ffffff",
+    "primaryColor": "#f8fafc",
+    "primaryTextColor": "#111827",
+    "primaryBorderColor": "#334155",
+    "lineColor": "#475569",
+    "secondaryColor": "#f1f5f9",
+    "secondaryTextColor": "#111827",
+    "tertiaryColor": "#e2e8f0",
+    "tertiaryTextColor": "#111827",
+    "actorBkg": "#f8fafc",
+    "actorBorder": "#334155",
+    "actorTextColor": "#111827",
+    "signalColor": "#334155",
+    "signalTextColor": "#111827",
+    "labelBoxBkgColor": "#ffffff",
+    "labelBoxBorderColor": "#334155",
+    "labelTextColor": "#111827",
+    "noteBkgColor": "#eff6ff",
+    "noteBorderColor": "#334155",
+    "noteTextColor": "#111827"
   }
 }}%%
 sequenceDiagram
@@ -598,15 +598,15 @@ WHERE id = 8;
 %%{init: {
   "theme": "base",
   "themeVariables": {
-    "background": "#0b1020",
-    "primaryColor": "#111827",
-    "primaryTextColor": "#f9fafb",
-    "primaryBorderColor": "#f9fafb",
-    "lineColor": "#e5e7eb",
-    "secondaryColor": "#1f2937",
-    "secondaryTextColor": "#f9fafb",
-    "tertiaryColor": "#111827",
-    "tertiaryTextColor": "#f9fafb"
+    "background": "#ffffff",
+    "primaryColor": "#f8fafc",
+    "primaryTextColor": "#111827",
+    "primaryBorderColor": "#334155",
+    "lineColor": "#475569",
+    "secondaryColor": "#f1f5f9",
+    "secondaryTextColor": "#111827",
+    "tertiaryColor": "#e2e8f0",
+    "tertiaryTextColor": "#111827"
   }
 }}%%
 flowchart LR
@@ -639,15 +639,15 @@ WHERE id >= 8;
 %%{init: {
   "theme": "base",
   "themeVariables": {
-    "background": "#0b1020",
-    "primaryColor": "#111827",
-    "primaryTextColor": "#f9fafb",
-    "primaryBorderColor": "#f9fafb",
-    "lineColor": "#e5e7eb",
-    "secondaryColor": "#1f2937",
-    "secondaryTextColor": "#f9fafb",
-    "tertiaryColor": "#111827",
-    "tertiaryTextColor": "#f9fafb"
+    "background": "#ffffff",
+    "primaryColor": "#f8fafc",
+    "primaryTextColor": "#111827",
+    "primaryBorderColor": "#334155",
+    "lineColor": "#475569",
+    "secondaryColor": "#f1f5f9",
+    "secondaryTextColor": "#111827",
+    "tertiaryColor": "#e2e8f0",
+    "tertiaryTextColor": "#111827"
   }
 }}%%
 flowchart LR
@@ -706,15 +706,15 @@ SELECT * FROM demo.students WHERE major = "CS";
 %%{init: {
   "theme": "base",
   "themeVariables": {
-    "background": "#0b1020",
-    "primaryColor": "#111827",
-    "primaryTextColor": "#f9fafb",
-    "primaryBorderColor": "#f9fafb",
-    "lineColor": "#e5e7eb",
-    "secondaryColor": "#1f2937",
-    "secondaryTextColor": "#f9fafb",
-    "tertiaryColor": "#0f172a",
-    "tertiaryTextColor": "#f9fafb"
+    "background": "#ffffff",
+    "primaryColor": "#f8fafc",
+    "primaryTextColor": "#111827",
+    "primaryBorderColor": "#334155",
+    "lineColor": "#475569",
+    "secondaryColor": "#f1f5f9",
+    "secondaryTextColor": "#111827",
+    "tertiaryColor": "#e2e8f0",
+    "tertiaryTextColor": "#111827"
   }
 }}%%
 xychart-beta
