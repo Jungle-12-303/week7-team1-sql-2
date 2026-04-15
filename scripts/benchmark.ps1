@@ -1,6 +1,6 @@
 ﻿param(
     [int]$Rows = 1000000,
-    [int]$Runs = 5
+    [int]$Runs = 50
 )
 
 $ErrorActionPreference = "Stop"
@@ -20,22 +20,6 @@ function New-CleanDir([string]$path) {
         Remove-Item -Recurse -Force $path
     }
     New-Item -ItemType Directory -Force $path | Out-Null
-}
-
-function Get-Stats([double[]]$values) {
-    if ($null -eq $values -or $values.Count -eq 0) {
-        return ,@(0.0, 0.0)
-    }
-
-    $sorted = $values | Sort-Object
-    $sum = 0.0
-    foreach ($v in $values) {
-        $sum += [double]$v
-    }
-    $avg = $sum / [double]$values.Count
-    $p95Index = [Math]::Ceiling($sorted.Count * 0.95) - 1
-    if ($p95Index -lt 0) { $p95Index = 0 }
-    return ,@([Math]::Round($avg, 3), [Math]::Round([double]$sorted[$p95Index], 3))
 }
 
 function Measure-CommandMs([scriptblock]$work) {
@@ -75,30 +59,24 @@ $writer.Close()
 
 $insertMs = Measure-CommandMs { Invoke-MiniSql $dbRoot $insertSql | Out-Null }
 
-$idQueryTimes = @()
-$linearQueryTimes = @()
-
+$idBatchSql = Join-Path $sqlDir "query_id_batch.sql"
+$linBatchSql = Join-Path $sqlDir "query_lin_batch.sql"
+$idWriter = New-Object System.IO.StreamWriter($idBatchSql, $false, $utf8NoBom)
+$linWriter = New-Object System.IO.StreamWriter($linBatchSql, $false, $utf8NoBom)
 for ($r = 1; $r -le $Runs; $r++) {
-    $targetId = Get-Random -Minimum 1 -Maximum ($Rows + 1)
-    $idSql = Join-Path $sqlDir "query_id_$r.sql"
-    $linSql = Join-Path $sqlDir "query_lin_$r.sql"
-
-    Write-Utf8NoBom $idSql "SELECT name FROM demo.students WHERE id = $targetId;"
-    Write-Utf8NoBom $linSql "SELECT name FROM demo.students WHERE major = 'M5';"
-
-    $idMs = Measure-CommandMs { Invoke-MiniSql $dbRoot $idSql | Out-Null }
-    $linMs = Measure-CommandMs { Invoke-MiniSql $dbRoot $linSql | Out-Null }
-
-    $idQueryTimes += [double]$idMs
-    $linearQueryTimes += [double]$linMs
+    $targetId = ((($r * 7919) % $Rows) + 1)
+    $idWriter.WriteLine("SELECT name FROM demo.students WHERE id = $targetId;")
+    $linWriter.WriteLine("SELECT name FROM demo.students WHERE major = 'M5';")
 }
+$idWriter.Flush(); $idWriter.Close()
+$linWriter.Flush(); $linWriter.Close()
 
-$idStats = Get-Stats $idQueryTimes
-$linearStats = Get-Stats $linearQueryTimes
-$idAvg = [double]$idStats[0]
-$idP95 = [double]$idStats[1]
-$linAvg = [double]$linearStats[0]
-$linP95 = [double]$linearStats[1]
+# 케이스별로 프로세스를 한 번만 실행해 인덱스 재구축 반복을 줄인다.
+$idTotalMs = Measure-CommandMs { Invoke-MiniSql $dbRoot $idBatchSql | Out-Null }
+$linTotalMs = Measure-CommandMs { Invoke-MiniSql $dbRoot $linBatchSql | Out-Null }
+
+$idAvg = [Math]::Round(($idTotalMs / [Math]::Max($Runs, 1)), 3)
+$linAvg = [Math]::Round(($linTotalMs / [Math]::Max($Runs, 1)), 3)
 $speedup = [Math]::Round(($linAvg / [Math]::Max($idAvg, 0.001)), 2)
 
 $textInsertPath = Join-Path $sqlDir "text_insert_simulation.txt"
@@ -116,10 +94,10 @@ $textMsRounded = [Math]::Round([double]$textMs, 3)
 $insertMsRounded = [Math]::Round([double]$insertMs, 3)
 
 Write-Host "Benchmark completed"
-Write-Host "Rows: $Rows / Runs per query case: $Runs"
+Write-Host "Rows: $Rows / Queries per case: $Runs"
 Write-Host ""
-Write-Host ("Case A (WHERE id = ? / index path): avg={0}ms, p95={1}ms" -f $idAvg, $idP95)
-Write-Host ("Case B (WHERE major = ? / linear path): avg={0}ms, p95={1}ms" -f $linAvg, $linP95)
+Write-Host ("Case A (WHERE id = ? / index path): total={0}ms, avg={1}ms" -f ([Math]::Round($idTotalMs,3)), $idAvg)
+Write-Host ("Case B (WHERE major = ? / linear path): total={0}ms, avg={1}ms" -f ([Math]::Round($linTotalMs,3)), $linAvg)
 Write-Host "Speedup (B/A): ${speedup}x"
 Write-Host ""
 Write-Host "Case C (insert total time):"
