@@ -9,7 +9,7 @@
 
 ### 1-1. 한 줄 설명
 
-- `INSERT` 시 자동으로 ID를 부여하고, 해당 ID를 B+ Tree 인덱스에 등록해 `WHERE id = ?` 조회를 빠르게 처리하는 Mini SQL 엔진
+- `INSERT` 시 자동으로 ID를 부여하면 해당 ID를 B+ Tree 인덱스에 등록해 `WHERE id = ?` 조회를 빠르게 처리하는 Mini SQL 엔진
 
 ### 1-2. 프로젝트 목표
 
@@ -30,7 +30,7 @@
 
 ### 1-4. 데이터 저장 구조
 
-- `.data` 텍스트 포맷 대신 바이너리 row 포맷 사용
+- 바이너리 row 포맷 사용
 - 각 row를 파일 내 `row offset`으로 직접 접근
 - B+ Tree에 `id -> row offset` 매핑 유지
 - 인덱스 조회 시 파일 전체를 순회하지 않고 row 위치로 직접 이동
