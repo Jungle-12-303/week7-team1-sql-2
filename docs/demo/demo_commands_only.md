@@ -39,7 +39,7 @@ docker run --rm --entrypoint /bin/bash week7-mini-sql -lc \
 
 옵션 사용 예시:
 ```powershell
-.\scripts\bench_docker.ps1 -Rows 1000000 -TargetId 777777 -Image week7-mini-sql
+.\scripts\bench_docker.ps1 -Rows 1000000 -Runs 5 -Image week7-mini-sql
 ```
 
 SQL 오타/예외 처리 데모:
@@ -51,7 +51,9 @@ SQL 오타/예외 처리 데모:
 - 2번: `INSERT 1` 출력, `WHERE id = 2` 결과 1건 확인
 - 3번: `WHERE id >=`, `<=`, `>`, `<` 범위 조회 결과 확인
 - 4번: `students.data`(바이너리), `students.data.text.bak`(텍스트 백업) 확인
-- 5번: `insert_total_ms`, `id_query_ms`, `linear_query_ms`, `case_a_path/case_b_path` 비교
+- 5번: 벤치 표에서 `Target ID`가 `1`, `500000`, `1000000`으로 3줄 출력되는지 확인
+- 5번: 각 줄의 `ID Index avg/p95` vs `StudentNo avg/p95` 비교
+- 5번: `Target Name`이 `U1`, `U500000`, `U1000000`으로 정확히 출력되는지 확인
 
 참고:
 - PowerShell에서 `docker ... -lc "긴 문자열"` 형태는 quoting 깨짐이 날 수 있으므로

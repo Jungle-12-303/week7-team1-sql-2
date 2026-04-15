@@ -107,38 +107,37 @@ docker run --rm --entrypoint /bin/bash week7-mini-sql -lc \
 ```
 
 ### 화면에서 기대할 결과
-- `insert_total_ms`, `id_query_ms`, `linear_query_ms` 숫자가 출력된다.
-- `case_a_path=B+TREE_ID_INDEX`, `case_b_path=LINEAR_SCAN_MAJOR` 라벨이 출력된다.
-- `WHERE id = 777777` 결과가 1건 출력된다.
-- `WHERE major = 'M5'` 결과가 100000건 출력된다.
+- 벤치 표에 `Target ID`가 `1`, `500000`, `1000000`으로 3줄 출력된다.
+- 각 줄에서 `ID Index avg/p95`, `StudentNo avg/p95`, `Speedup`가 함께 출력된다.
+- 각 케이스에서 `Target Name`이 `U1`, `U500000`, `U1000000`으로 검증된다.
+- `Legend`에 `ID Index = B+Tree`, `StudentNo = Linear Scan`이 표시된다.
 
-### 실제 측정 예시 (2026-04-15)
-- `insert_total_ms=16000`
-- `id_query_ms=1000`
-- `linear_query_ms=2000`
-- `case_a_path=B+TREE_ID_INDEX`
-- `case_b_path=LINEAR_SCAN_MAJOR`
+### 실제 측정 예시 (2026-04-16)
+- Rows: `1000000`, Runs: `5`
+- Insert Total: `12249 ms`
+- `id=1`      -> `ID 997.000/1055`, `StudentNo 1493.200/1530`, `Speedup 1.50x`
+- `id=500000` -> `ID 970.800/976`,  `StudentNo 1494.600/1513`, `Speedup 1.54x`
+- `id=1000000`-> `ID 991.000/1016`, `StudentNo 1534.000/1564`, `Speedup 1.55x`
 
 ### 비교 해석 (발표용)
-| 항목 | 측정값 | 해석 |
-| --- | ---: | --- |
-| Case A: `WHERE id = ?` (B+ 트리) | 1000ms | 단건 키 조회가 빠르게 수행됨 |
-| Case B: `WHERE major = ?` (선형) | 2000ms | 전체 레코드 스캔으로 시간이 더 소요됨 |
-| 속도비 (B/A) | 2.0x | B+ 트리 경로가 약 2배 빠름 |
+| 타깃 id | B+Tree(`WHERE id = ?`) avg | 선형(`WHERE student_no = ?`) avg | 해석 |
+| --- | ---: | ---: | --- |
+| 1 | 997.000ms | 1493.200ms | 동일 대상 비교에서 B+Tree가 빠름 |
+| 500000 | 970.800ms | 1494.600ms | 중간 위치에서도 B+Tree 우위 유지 |
+| 1000000 | 991.000ms | 1534.000ms | 끝 위치에서도 B+Tree 우위 유지 |
 
 ### 시각 자료 (텍스트 바 차트)
 ```text
-Query Latency (lower is better)
+Demo Targets (lower is better)
 
-Case A (B+ tree id index) : 1000 ms |████████████████████
-Case B (linear scan)      : 2000 ms |████████████████████████████████████████
-
-Relative speedup: Case A is 2.0x faster than Case B
+id=1       : ID Index 997.000/1055 | StudentNo 1493.200/1530 | 1.50x
+id=500000  : ID Index 970.800/976  | StudentNo 1494.600/1513 | 1.54x
+id=1000000 : ID Index 991.000/1016 | StudentNo 1534.000/1564 | 1.55x
 ```
 
 ### 발표 멘트
-- "동일한 Docker 환경에서 100만 건 삽입 후 B+ 트리 경로(Case A)와 선형 경로(Case B)를 분리 측정했습니다."
-- "동일 조건에서 id 경로가 선형 스캔 대비 약 2배 빨랐고, 출력 라벨로 경로 자체를 함께 검증했습니다."
+- "동일한 3개 타깃(id 1, 500000, 1000000)을 기준으로 B+Tree(id)와 선형(student_no)을 비교했습니다."
+- "조회 대상을 고정해서, 경로 차이에 따른 성능 차이만 비교되도록 설계했습니다."
 <!-- - "PowerShell quoting 이슈를 피하기 위해 벤치는 `scripts/bench_docker.ps1` 단일 명령으로 실행합니다." -->
 
 ## Q&A 빠른 답변

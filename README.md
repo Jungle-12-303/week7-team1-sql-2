@@ -776,7 +776,6 @@ xychart-beta
 
 ## 6. 소감
 
-<<<<<<< HEAD
 ### 6-1. 공통
 
 - 이번 프로젝트를 통해 B+ Tree가 단순한 자료구조 이론이 아니라, 실제 데이터 조회 성능을 개선하기 위한 핵심 인덱스 구조라는 점을 확인할 수 있었습니다.
@@ -789,35 +788,3 @@ xychart-beta
 - 민정: B+ Tree를 공부하면서 자료구조가 단순히 이론으로만 존재하는 것이 아니라, 실제 데이터 조회 성능을 개선하기 위해 구체적으로 활용된다는 점을 이해할 수 있었다. 특히 모든 데이터를 순차적으로 탐색하지 않고, 정렬된 구조를 바탕으로 탐색 범위를 빠르게 좁혀 간다는 점이 인상적이었다. 이를 통해 인덱스는 단순한 저장 구조가 아니라, 대량의 데이터에서 원하는 값을 효율적으로 찾기 위한 탐색 전략이라는 점을 배울 수 있었다.
 - 혜연: 추후 작성 예정
 - 정연: 추후 작성 예정
-
-
-## 7. 코드 레벨 핵심 구현
-
-- 이 섹션은 발표 시간이 남을 때 실제 함수 이름 중심으로 설명하기 위한 후보 섹션입니다.
-- 3번에서 구조를 설명한 뒤, 필요하면 아래 함수 흐름으로 내려가면 됩니다.
-
-### 7-1. INSERT 경로 핵심 함수
-
-- `execute_statement()`에서 `INSERT` 문을 `append_insert_row()`로 연결
-- `next_id()`가 자동 ID를 생성
-- `binary_writer_append_row()`가 바이너리 row를 append하고 `row offset`을 반환
-- `index_insert()`가 `(id, row offset)`를 인덱스에 등록
-- 실제 B+ Tree 삽입은 `bpt_insert_recursive()`가 수행
-
-### 7-2. SELECT 경로 핵심 함수
-
-- `execute_statement()`에서 `SELECT` 문을 `run_select_query()`로 연결
-- `run_select_query()`가 `is_id_equality_predicate()` / `is_id_range_predicate()`로 분기
-- 단건 ID 조회는 `run_select_by_id()` -> `index_find()` -> `bpt_find()` 경로 사용
-- 범위 ID 조회는 `run_select_by_id_range()` -> `bpt_lower_bound()` 경로 사용
-- 인덱스 조회 이후 실제 row 읽기는 `binary_reader_read_row_at()`가 수행
-- 비인덱스 조건은 `run_select_linear()` -> `binary_reader_scan_all()` 경로 사용
-
-### 7-3. B+ Tree 관련 핵심 함수
-
-- `BptNode` 구조체가 internal / leaf 노드 형태를 함께 정의
-- `bpt_insert_recursive()`가 leaf 삽입과 internal 삽입을 모두 처리
-- leaf split 시 오른쪽 노드의 첫 key를 부모로 승격
-- internal split 시 중간 key를 부모로 승격
-- `bpt_find()`가 equality query 탐색을 담당
-- `bpt_lower_bound()`가 range query 시작 leaf를 찾음
