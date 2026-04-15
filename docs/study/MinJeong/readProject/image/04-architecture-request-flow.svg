@@ -1,0 +1,163 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="1320" viewBox="0 0 1500 1320" role="img" aria-labelledby="title desc">
+  <title id="title">Mini SQL architecture request flow</title>
+  <desc id="desc">A simplified architecture flow showing common request handling and three branches: INSERT, SELECT by id, and SELECT by id range.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#344054"/>
+    </marker>
+    <style>
+      .bg { fill: #f7f8fb; }
+      .title { font: 700 34px sans-serif; fill: #111827; }
+      .subtitle { font: 400 18px sans-serif; fill: #475467; }
+      .section { font: 700 22px sans-serif; fill: #101828; }
+      .small { font: 400 15px sans-serif; fill: #475467; }
+      .boxText { font: 700 18px sans-serif; fill: #111827; }
+      .boxSub { font: 400 14px sans-serif; fill: #475467; }
+      .note { font: 700 15px sans-serif; fill: #344054; }
+      .arrow { stroke: #344054; stroke-width: 2.4; fill: none; marker-end: url(#arrow); }
+      .arrowSoft { stroke: #667085; stroke-width: 2; fill: none; marker-end: url(#arrow); stroke-dasharray: 6 6; }
+      .common { fill: #eaf2ff; stroke: #2f6fed; stroke-width: 2; }
+      .parser { fill: #effaf3; stroke: #24945d; stroke-width: 2; }
+      .executor { fill: #fff3e8; stroke: #ef7d22; stroke-width: 2; }
+      .insert { fill: #fef3f2; stroke: #d92d20; stroke-width: 2; }
+      .selectOne { fill: #eef4ff; stroke: #4e5bd5; stroke-width: 2; }
+      .selectRange { fill: #f5f0ff; stroke: #7a5af8; stroke-width: 2; }
+      .storage { fill: #ecfdf3; stroke: #16a34a; stroke-width: 2; }
+      .output { fill: #f8fafc; stroke: #64748b; stroke-width: 2; }
+      .decision { fill: #ffffff; stroke: #344054; stroke-width: 2; }
+    </style>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1500" height="1320"/>
+  <text class="title" x="70" y="66">요청 흐름으로 보는 전체 아키텍처</text>
+  <text class="subtitle" x="70" y="100">SQL 문자열이 parser, executor, storage를 지나 INSERT / 단건 SELECT / 범위 SELECT로 처리되는 큰 흐름</text>
+
+  <!-- Common flow -->
+  <text class="section" x="70" y="156">1. 공통 시작 흐름</text>
+
+  <rect class="common" x="70" y="185" width="250" height="86" rx="10"/>
+  <text class="boxText" x="95" y="220">사용자 SQL 입력</text>
+  <text class="boxSub" x="95" y="246">INSERT / SELECT 문장</text>
+
+  <rect class="common" x="380" y="185" width="250" height="86" rx="10"/>
+  <text class="boxText" x="405" y="220">main.c</text>
+  <text class="boxSub" x="405" y="246">SQL 문자열 확보</text>
+
+  <rect class="parser" x="690" y="185" width="250" height="86" rx="10"/>
+  <text class="boxText" x="715" y="220">parser.c</text>
+  <text class="boxSub" x="715" y="246">Statement 구조체 생성</text>
+
+  <rect class="executor" x="1000" y="185" width="250" height="86" rx="10"/>
+  <text class="boxText" x="1025" y="220">executor.c</text>
+  <text class="boxSub" x="1025" y="246">문장 종류 판단</text>
+
+  <path class="arrow" d="M 320 228 L 380 228"/>
+  <path class="arrow" d="M 630 228 L 690 228"/>
+  <path class="arrow" d="M 940 228 L 1000 228"/>
+
+  <polygon class="decision" points="1125,330 1260,405 1125,480 990,405"/>
+  <text class="boxText" x="1072" y="398">INSERT?</text>
+  <text class="boxSub" x="1067" y="423">SELECT?</text>
+  <path class="arrow" d="M 1125 271 L 1125 330"/>
+
+  <!-- Branch labels -->
+  <text class="section" x="70" y="555">2. 요청별 처리 흐름</text>
+  <text class="small" x="70" y="584">세 흐름 모두 마지막에는 QueryResult 또는 INSERT 결과가 executor.c로 돌아가 출력됩니다.</text>
+
+  <!-- INSERT branch -->
+  <rect class="insert" x="70" y="630" width="360" height="76" rx="10"/>
+  <text class="boxText" x="95" y="660">INSERT 요청</text>
+  <text class="boxSub" x="95" y="684">append_insert_row 선택</text>
+
+  <rect class="storage" x="70" y="745" width="360" height="76" rx="10"/>
+  <text class="boxText" x="95" y="775">load_table_definition</text>
+  <text class="boxSub" x="95" y="799">schema 읽고 컬럼 순서 확인</text>
+
+  <rect class="storage" x="70" y="860" width="360" height="76" rx="10"/>
+  <text class="boxText" x="95" y="890">next_id</text>
+  <text class="boxSub" x="95" y="914">새 자동 id 생성</text>
+
+  <rect class="storage" x="70" y="975" width="360" height="76" rx="10"/>
+  <text class="boxText" x="95" y="1005">binary_writer_append_row</text>
+  <text class="boxSub" x="95" y="1029">row 저장, row_ref 획득</text>
+
+  <rect class="insert" x="70" y="1090" width="360" height="76" rx="10"/>
+  <text class="boxText" x="95" y="1120">index_insert</text>
+  <text class="boxSub" x="95" y="1144">B+ Tree에 id → row_ref 등록</text>
+
+  <path class="arrow" d="M 250 706 L 250 745"/>
+  <path class="arrow" d="M 250 821 L 250 860"/>
+  <path class="arrow" d="M 250 936 L 250 975"/>
+  <path class="arrow" d="M 250 1051 L 250 1090"/>
+
+  <!-- SELECT single branch -->
+  <rect class="selectOne" x="570" y="630" width="360" height="76" rx="10"/>
+  <text class="boxText" x="595" y="660">단건 SELECT</text>
+  <text class="boxSub" x="595" y="684">WHERE id = 2</text>
+
+  <rect class="storage" x="570" y="745" width="360" height="76" rx="10"/>
+  <text class="boxText" x="595" y="775">activate_storage_for_table</text>
+  <text class="boxSub" x="595" y="799">기존 데이터로 B+ Tree 준비</text>
+
+  <rect class="selectOne" x="570" y="860" width="360" height="76" rx="10"/>
+  <text class="boxText" x="595" y="890">is_id_equality_predicate</text>
+  <text class="boxSub" x="595" y="914">id = 숫자 조건인지 확인</text>
+
+  <rect class="selectOne" x="570" y="975" width="360" height="76" rx="10"/>
+  <text class="boxText" x="595" y="1005">index_find</text>
+  <text class="boxSub" x="595" y="1029">B+ Tree에서 row_ref 하나 찾기</text>
+
+  <rect class="storage" x="570" y="1090" width="360" height="76" rx="10"/>
+  <text class="boxText" x="595" y="1120">binary_reader_read_row_at</text>
+  <text class="boxSub" x="595" y="1144">row_ref 위치의 row 하나 읽기</text>
+
+  <path class="arrow" d="M 750 706 L 750 745"/>
+  <path class="arrow" d="M 750 821 L 750 860"/>
+  <path class="arrow" d="M 750 936 L 750 975"/>
+  <path class="arrow" d="M 750 1051 L 750 1090"/>
+
+  <!-- SELECT range branch -->
+  <rect class="selectRange" x="1070" y="630" width="360" height="76" rx="10"/>
+  <text class="boxText" x="1095" y="660">범위 SELECT</text>
+  <text class="boxSub" x="1095" y="684">WHERE id &gt;= 10</text>
+
+  <rect class="storage" x="1070" y="745" width="360" height="76" rx="10"/>
+  <text class="boxText" x="1095" y="775">activate_storage_for_table</text>
+  <text class="boxSub" x="1095" y="799">기존 데이터로 B+ Tree 준비</text>
+
+  <rect class="selectRange" x="1070" y="860" width="360" height="76" rx="10"/>
+  <text class="boxText" x="1095" y="890">is_id_range_predicate</text>
+  <text class="boxSub" x="1095" y="914">id 범위 조건인지 확인</text>
+
+  <rect class="selectRange" x="1070" y="975" width="360" height="76" rx="10"/>
+  <text class="boxText" x="1095" y="1005">bpt_lower_bound</text>
+  <text class="boxSub" x="1095" y="1029">시작 leaf와 index 찾기</text>
+
+  <rect class="selectRange" x="1070" y="1090" width="360" height="76" rx="10"/>
+  <text class="boxText" x="1095" y="1120">leaf.next 순회</text>
+  <text class="boxSub" x="1095" y="1144">여러 row_ref를 차례로 읽기</text>
+
+  <path class="arrow" d="M 1250 706 L 1250 745"/>
+  <path class="arrow" d="M 1250 821 L 1250 860"/>
+  <path class="arrow" d="M 1250 936 L 1250 975"/>
+  <path class="arrow" d="M 1250 1051 L 1250 1090"/>
+
+  <!-- Branch connectors from decision -->
+  <path class="arrowSoft" d="M 990 405 C 540 405, 250 470, 250 630"/>
+  <text class="note" x="430" y="420">INSERT</text>
+
+  <path class="arrowSoft" d="M 1125 480 C 1090 555, 820 555, 750 630"/>
+  <text class="note" x="840" y="560">SELECT id = ?</text>
+
+  <path class="arrowSoft" d="M 1260 405 C 1390 455, 1320 555, 1250 630"/>
+  <text class="note" x="1302" y="455">SELECT id 범위</text>
+
+  <!-- Output -->
+  <rect class="output" x="420" y="1210" width="660" height="70" rx="10"/>
+  <text class="boxText" x="450" y="1238">print_execution_result</text>
+  <text class="boxSub" x="450" y="1262">INSERT 1 또는 SELECT 결과 표 출력 후 main.c로 반환</text>
+
+  <path class="arrow" d="M 250 1166 C 250 1215, 350 1245, 420 1245"/>
+  <path class="arrow" d="M 750 1166 L 750 1210"/>
+  <path class="arrow" d="M 1250 1166 C 1250 1215, 1150 1245, 1080 1245"/>
+</svg>
