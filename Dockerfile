@@ -16,6 +16,7 @@ WORKDIR /app
 
 COPY --from=build /app/build/mini_sql ./build/mini_sql
 COPY --from=build /app/examples ./examples
+COPY docker-entrypoint.sh ./docker-entrypoint.sh
+RUN chmod +x ./docker-entrypoint.sh
 
-ENTRYPOINT ["./build/mini_sql"]
-CMD ["examples/db"]
+ENTRYPOINT ["./docker-entrypoint.sh"]
