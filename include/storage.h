@@ -40,6 +40,8 @@ bool append_insert_row(
     const char *db_root,
     const InsertStatement *statement,
     size_t *affected_rows,
+    StringList *out_insert_columns,
+    StringList *out_insert_values,
     char *error,
     size_t error_size
 );

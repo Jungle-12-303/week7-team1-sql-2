@@ -1,4 +1,4 @@
-﻿param(
+param(
     [int]$Rows = 1000000,
     [int]$Runs = 5
 )
@@ -54,75 +54,97 @@ function Invoke-MiniSql([string]$db, [string]$sqlPath) {
     if ($LASTEXITCODE -ne 0) {
         throw "mini_sql failed for '$sqlPath'`n$($output | Out-String)"
     }
-    return $output
+    return ($output | Out-String)
 }
 
 Ensure-Build
 New-CleanDir $dbRoot
 New-CleanDir $sqlDir
 New-Item -ItemType Directory -Force (Join-Path $dbRoot "demo") | Out-Null
-Write-Utf8NoBom (Join-Path $dbRoot "demo\students.schema") "id|name|major"
+Write-Utf8NoBom (Join-Path $dbRoot "demo\students.schema") "id|student_no|name|major|grade"
 Write-Utf8NoBom (Join-Path $dbRoot "demo\students.data") ""
 
 $insertSql = Join-Path $sqlDir "bulk_insert.sql"
 $writer = New-Object System.IO.StreamWriter($insertSql, $false, $utf8NoBom)
 for ($i = 1; $i -le $Rows; $i++) {
+    $studentNo = (2026000000 + $i).ToString()
+    $name = "U$i"
     $major = "M$($i % 10)"
-    $writer.WriteLine("INSERT INTO demo.students (name, major) VALUES ('U$i', '$major');")
+    $grade = (($i % 4) + 1).ToString()
+    $writer.WriteLine("INSERT INTO demo.students (student_no, name, major, grade) VALUES ('$studentNo', '$name', '$major', '$grade');")
 }
 $writer.Flush()
 $writer.Close()
 
 $insertMs = Measure-CommandMs { Invoke-MiniSql $dbRoot $insertSql | Out-Null }
 
+# 모든 런에서 동일한 조회 대상을 사용해 비교 신뢰도를 고정한다.
+$targetRow = [Math]::Floor($Rows / 2)
+if ($targetRow -lt 1) { $targetRow = 1 }
+$targetId = $targetRow
+$targetStudentNo = (2026000000 + $targetRow).ToString()
+$targetName = "U$targetRow"
+
 $idQueryTimes = @()
-$linearQueryTimes = @()
+$studentNoLinearTimes = @()
+$nameLinearTimes = @()
 
 for ($r = 1; $r -le $Runs; $r++) {
-    $targetId = Get-Random -Minimum 1 -Maximum ($Rows + 1)
     $idSql = Join-Path $sqlDir "query_id_$r.sql"
-    $linSql = Join-Path $sqlDir "query_lin_$r.sql"
+    $studentNoSql = Join-Path $sqlDir "query_student_no_$r.sql"
+    $nameSql = Join-Path $sqlDir "query_name_$r.sql"
 
     Write-Utf8NoBom $idSql "SELECT name FROM demo.students WHERE id = $targetId;"
-    Write-Utf8NoBom $linSql "SELECT name FROM demo.students WHERE major = 'M5';"
+    Write-Utf8NoBom $studentNoSql "SELECT name FROM demo.students WHERE student_no = '$targetStudentNo';"
+    Write-Utf8NoBom $nameSql "SELECT name FROM demo.students WHERE name = '$targetName';"
 
-    $idMs = Measure-CommandMs { Invoke-MiniSql $dbRoot $idSql | Out-Null }
-    $linMs = Measure-CommandMs { Invoke-MiniSql $dbRoot $linSql | Out-Null }
+    $idOutput = $null
+    $studentOutput = $null
+    $nameOutput = $null
+
+    $idMs = Measure-CommandMs { $idOutput = Invoke-MiniSql $dbRoot $idSql }
+    $studentMs = Measure-CommandMs { $studentOutput = Invoke-MiniSql $dbRoot $studentNoSql }
+    $nameMs = Measure-CommandMs { $nameOutput = Invoke-MiniSql $dbRoot $nameSql }
+
+    if ($idOutput -notmatch [Regex]::Escape($targetName)) {
+        throw "Indexed id query did not return fixed target name: $targetName"
+    }
+    if ($studentOutput -notmatch [Regex]::Escape($targetName)) {
+        throw "Linear student_no query did not return fixed target name: $targetName"
+    }
+    if ($nameOutput -notmatch [Regex]::Escape($targetName)) {
+        throw "Linear name query did not return fixed target name: $targetName"
+    }
 
     $idQueryTimes += [double]$idMs
-    $linearQueryTimes += [double]$linMs
+    $studentNoLinearTimes += [double]$studentMs
+    $nameLinearTimes += [double]$nameMs
 }
 
 $idStats = Get-Stats $idQueryTimes
-$linearStats = Get-Stats $linearQueryTimes
+$studentStats = Get-Stats $studentNoLinearTimes
+$nameStats = Get-Stats $nameLinearTimes
+
 $idAvg = [double]$idStats[0]
 $idP95 = [double]$idStats[1]
-$linAvg = [double]$linearStats[0]
-$linP95 = [double]$linearStats[1]
-$speedup = [Math]::Round(($linAvg / [Math]::Max($idAvg, 0.001)), 2)
+$studentAvg = [double]$studentStats[0]
+$studentP95 = [double]$studentStats[1]
+$nameAvg = [double]$nameStats[0]
+$nameP95 = [double]$nameStats[1]
 
-$textInsertPath = Join-Path $sqlDir "text_insert_simulation.txt"
-$textMs = Measure-CommandMs {
-    $tw = New-Object System.IO.StreamWriter($textInsertPath, $false, [System.Text.Encoding]::UTF8)
-    for ($i = 1; $i -le $Rows; $i++) {
-        $tw.WriteLine("$i|U$i|M$($i % 10)")
-    }
-    $tw.Flush()
-    $tw.Close()
-}
-
-$binaryVsTextGain = [Math]::Round(((($textMs - $insertMs) / [Math]::Max($textMs, 0.001)) * 100), 2)
-$textMsRounded = [Math]::Round([double]$textMs, 3)
+$speedupStudent = [Math]::Round(($studentAvg / [Math]::Max($idAvg, 0.001)), 2)
+$speedupName = [Math]::Round(($nameAvg / [Math]::Max($idAvg, 0.001)), 2)
 $insertMsRounded = [Math]::Round([double]$insertMs, 3)
 
 Write-Host "Benchmark completed"
 Write-Host "Rows: $Rows / Runs per query case: $Runs"
+Write-Host ("Fixed target: id={0}, student_no={1}, name={2}" -f $targetId, $targetStudentNo, $targetName)
 Write-Host ""
-Write-Host ("Case A (WHERE id = ? / index path): avg={0}ms, p95={1}ms" -f $idAvg, $idP95)
-Write-Host ("Case B (WHERE major = ? / linear path): avg={0}ms, p95={1}ms" -f $linAvg, $linP95)
-Write-Host "Speedup (B/A): ${speedup}x"
+Write-Host ("Case A (index, WHERE id = ?): avg={0}ms, p95={1}ms" -f $idAvg, $idP95)
+Write-Host ("Case B (linear, WHERE student_no = ?): avg={0}ms, p95={1}ms" -f $studentAvg, $studentP95)
+Write-Host ("Case C (linear, WHERE name = ?): avg={0}ms, p95={1}ms" -f $nameAvg, $nameP95)
+Write-Host ("Speedup (B/A): {0}x" -f $speedupStudent)
+Write-Host ("Speedup (C/A): {0}x" -f $speedupName)
 Write-Host ""
-Write-Host "Case C (insert total time):"
-Write-Host ("  text simulation: {0}ms" -f $textMsRounded)
-Write-Host ("  binary engine:   {0}ms" -f $insertMsRounded)
-Write-Host ("  improvement:     {0}%" -f $binaryVsTextGain)
+Write-Host ("Insert total time (binary, {0} rows): {1}ms" -f $Rows, $insertMsRounded)
+Write-Host "Note: student_no query is intentionally measured on linear scan path (non-B+Tree)."

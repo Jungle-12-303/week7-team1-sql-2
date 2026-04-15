@@ -16,7 +16,15 @@ bool execute_statement(
     /* 파서가 정한 문장 타입에 맞춰 스토리지 동작으로 연결한다. */
     if (statement->type == STATEMENT_INSERT) {
         result->kind = EXECUTION_INSERT;
-        return append_insert_row(db_root, &statement->as.insert, &result->affected_rows, error, error_size);
+        return append_insert_row(
+            db_root,
+            &statement->as.insert,
+            &result->affected_rows,
+            &result->insert_columns,
+            &result->insert_values,
+            error,
+            error_size
+        );
     }
 
     if (statement->type == STATEMENT_SELECT) {
@@ -32,6 +40,10 @@ void free_execution_result(ExecutionResult *result) {
     /* SELECT 결과만 동적 결과 테이블을 들고 있으므로 별도 해제가 필요하다. */
     if (result->kind == EXECUTION_SELECT) {
         free_query_result(&result->query_result);
+    }
+    if (result->kind == EXECUTION_INSERT) {
+        string_list_free(&result->insert_columns);
+        string_list_free(&result->insert_values);
     }
 
     memset(result, 0, sizeof(*result));
@@ -54,6 +66,13 @@ static void print_separator(const size_t *widths, size_t count, FILE *stream) {
 void print_execution_result(const ExecutionResult *result, FILE *stream) {
     if (result->kind == EXECUTION_INSERT) {
         fprintf(stream, "INSERT %zu\n", result->affected_rows);
+        if (result->insert_columns.count == result->insert_values.count && result->insert_columns.count > 0) {
+            size_t i;
+            fprintf(stream, "입력된 row:\n");
+            for (i = 0; i < result->insert_columns.count; ++i) {
+                fprintf(stream, "  - %s: %s\n", result->insert_columns.items[i], result->insert_values.items[i]);
+            }
+        }
         return;
     }
 

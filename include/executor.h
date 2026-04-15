@@ -14,6 +14,8 @@ typedef enum {
 typedef struct {
     ExecutionKind kind;
     size_t affected_rows;
+    StringList insert_columns;
+    StringList insert_values;
     QueryResult query_result;
 } ExecutionResult;
 

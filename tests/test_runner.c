@@ -40,12 +40,14 @@ static void prepare_schema(const char *root, const char *schema_line) {
     ASSERT_TRUE(write_text_file("tests/tmp/unit_db/demo/students.data", "", error, sizeof(error)), error);
 }
 
-static void fill_insert_statement(InsertStatement *insert, const char *name, const char *major) {
+static void fill_insert_statement(InsertStatement *insert, const char *student_no, const char *name, const char *major) {
     memset(insert, 0, sizeof(*insert));
     insert->target.schema = sql_strdup("demo");
     insert->target.table = sql_strdup("students");
+    ASSERT_TRUE(string_list_append(&insert->columns, "student_no"), "append student_no column");
     ASSERT_TRUE(string_list_append(&insert->columns, "name"), "append name column");
     ASSERT_TRUE(string_list_append(&insert->columns, "major"), "append major column");
+    ASSERT_TRUE(string_list_append(&insert->values, student_no), "append student_no value");
     ASSERT_TRUE(string_list_append(&insert->values, name), "append name value");
     ASSERT_TRUE(string_list_append(&insert->values, major), "append major value");
 }
@@ -119,14 +121,14 @@ static void test_auto_id_and_where_id(void) {
     QueryResult result;
     size_t affected = 0;
 
-    prepare_schema(root, "id|name|major");
+    prepare_schema(root, "id|student_no|name|major");
 
-    fill_insert_statement(&insert1, "Alice", "DB");
-    fill_insert_statement(&insert2, "Bob", "AI");
+    fill_insert_statement(&insert1, "2026000001", "Alice", "DB");
+    fill_insert_statement(&insert2, "2026000002", "Bob", "AI");
 
-    ASSERT_TRUE(append_insert_row(root, &insert1, &affected, error, sizeof(error)), error);
+    ASSERT_TRUE(append_insert_row(root, &insert1, &affected, NULL, NULL, error, sizeof(error)), error);
     ASSERT_TRUE(affected == 1, "first insert should affect one row");
-    ASSERT_TRUE(append_insert_row(root, &insert2, &affected, error, sizeof(error)), error);
+    ASSERT_TRUE(append_insert_row(root, &insert2, &affected, NULL, NULL, error, sizeof(error)), error);
     ASSERT_TRUE(affected == 1, "second insert should affect one row");
 
     memset(&select_stmt, 0, sizeof(select_stmt));
@@ -141,7 +143,7 @@ static void test_auto_id_and_where_id(void) {
     ASSERT_TRUE(run_select_query(root, &select_stmt, &result, error, sizeof(error)), error);
     ASSERT_TRUE(result.row_count == 1, "WHERE id should return one row");
     ASSERT_STRING("2", result.rows[0].values.items[0], "auto id should be generated as 2");
-    ASSERT_STRING("Bob", result.rows[0].values.items[1], "name should match id lookup");
+    ASSERT_STRING("Bob", result.rows[0].values.items[2], "name should match id lookup");
 
     free_qualified_name(&insert1.target);
     string_list_free(&insert1.columns);
@@ -174,6 +176,44 @@ static void test_where_name_linear(void) {
     ASSERT_TRUE(run_select_query(root, &select_stmt, &result, error, sizeof(error)), error);
     ASSERT_TRUE(result.row_count == 1, "WHERE major should return one row");
     ASSERT_STRING("Bob", result.rows[0].values.items[0], "linear WHERE should match Bob");
+
+    free_qualified_name(&select_stmt.source);
+    string_list_free(&select_stmt.columns);
+    free(select_stmt.where.column);
+    free(select_stmt.where.value);
+    free_query_result(&result);
+}
+
+static void test_student_no_unique_and_linear_query(void) {
+    const char *root = "tests/tmp/unit_db";
+    char error[SQL_ERROR_SIZE];
+    InsertStatement dup_insert;
+    SelectStatement select_stmt;
+    QueryResult result;
+    size_t affected = 0;
+
+    fill_insert_statement(&dup_insert, "2026000002", "Eve", "Math");
+    ASSERT_TRUE(!append_insert_row(root, &dup_insert, &affected, NULL, NULL, error, sizeof(error)),
+        "duplicate student_no insert should fail");
+    ASSERT_TRUE(strstr(error, "duplicate student_no") != NULL, "duplicate student_no message should be returned");
+    free_qualified_name(&dup_insert.target);
+    string_list_free(&dup_insert.columns);
+    string_list_free(&dup_insert.values);
+
+    memset(&select_stmt, 0, sizeof(select_stmt));
+    select_stmt.source.schema = sql_strdup("demo");
+    select_stmt.source.table = sql_strdup("students");
+    select_stmt.select_all = false;
+    ASSERT_TRUE(string_list_append(&select_stmt.columns, "name"), "append select name");
+    select_stmt.where.enabled = true;
+    select_stmt.where.column = sql_strdup("student_no");
+    select_stmt.where.value = sql_strdup("2026000002");
+    select_stmt.where.op = WHERE_OP_EQUAL;
+
+    memset(&result, 0, sizeof(result));
+    ASSERT_TRUE(run_select_query(root, &select_stmt, &result, error, sizeof(error)), error);
+    ASSERT_TRUE(result.row_count == 1, "WHERE student_no should return exactly one row");
+    ASSERT_STRING("Bob", result.rows[0].values.items[0], "student_no lookup should match Bob");
 
     free_qualified_name(&select_stmt.source);
     string_list_free(&select_stmt.columns);
@@ -251,6 +291,22 @@ static void test_where_id_range(void) {
     free_query_result(&result);
 }
 
+static void test_student_no_predicate_not_index_path(void) {
+    SelectStatement stmt;
+    uint64_t parsed_id = 0;
+
+    memset(&stmt, 0, sizeof(stmt));
+    stmt.where.enabled = true;
+    stmt.where.column = sql_strdup("student_no");
+    stmt.where.value = sql_strdup("2026000002");
+    stmt.where.op = WHERE_OP_EQUAL;
+
+    ASSERT_TRUE(!is_id_equality_predicate(&stmt, &parsed_id), "student_no predicate must not use id index path");
+
+    free(stmt.where.column);
+    free(stmt.where.value);
+}
+
 static void test_text_to_binary_migration(void) {
     const char *root = "tests/tmp/migration_db";
     char error[SQL_ERROR_SIZE];
@@ -290,8 +346,10 @@ int main(void) {
     test_index_insert_find();
     test_auto_id_and_where_id();
     test_where_name_linear();
+    test_student_no_unique_and_linear_query();
     test_where_id_not_found();
     test_where_id_range();
+    test_student_no_predicate_not_index_path();
     test_text_to_binary_migration();
 
     if (failures > 0) {

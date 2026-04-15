@@ -1,4 +1,4 @@
-#include "executor.h"
+﻿#include "executor.h"
 #include "parser.h"
 
 #include <ctype.h>
@@ -7,10 +7,15 @@
 #include <string.h>
 
 #if defined(_WIN32)
+#include <conio.h>
 #include <io.h>
 #else
+#include <termios.h>
 #include <unistd.h>
 #endif
+
+#define INTERACTIVE_LINE_MAX 2048
+#define HISTORY_MAX_ENTRIES 200
 
 typedef enum CliParseResult {
     CLI_PARSE_OK = 0,
@@ -23,6 +28,39 @@ typedef struct CliOptions {
     const char *sql_file;
     bool interactive_requested;
 } CliOptions;
+
+typedef struct InputHistory {
+    char *items[HISTORY_MAX_ENTRIES];
+    size_t count;
+} InputHistory;
+
+typedef enum ReadLineStatus {
+    READ_LINE_OK = 0,
+    READ_LINE_EOF,
+    READ_LINE_ERROR
+} ReadLineStatus;
+
+typedef enum KeyType {
+    KEY_NONE = 0,
+    KEY_CHAR,
+    KEY_ENTER,
+    KEY_BACKSPACE,
+    KEY_UP,
+    KEY_DOWN,
+    KEY_EOF
+} KeyType;
+
+typedef struct KeyEvent {
+    KeyType type;
+    char ch;
+} KeyEvent;
+
+#if !defined(_WIN32)
+typedef struct TerminalGuard {
+    struct termios original;
+    bool enabled;
+} TerminalGuard;
+#endif
 
 static bool contains_text_ci(const char *text, const char *pattern) {
     size_t i;
@@ -69,6 +107,11 @@ static const char *error_hint_ko(const char *error) {
     }
     if (contains_text_ci(error, "unknown column")) {
         return "존재하지 않는 컬럼을 사용했습니다. 스키마 컬럼명 오타를 확인해 주세요.";
+    }
+    if (contains_text_ci(error, "duplicate key")
+        || contains_text_ci(error, "duplicate id")
+        || contains_text_ci(error, "duplicate student_no")) {
+        return "이미 입력된 키 값입니다. 중복되지 않는 값으로 다시 시도해 주세요.";
     }
     if (contains_text_ci(error, "schema file is empty")) {
         return "스키마 파일이 비어 있습니다. 테이블 스키마를 먼저 정의해 주세요.";
@@ -369,32 +412,362 @@ static CliParseResult parse_cli_options(int argc, char **argv, CliOptions *optio
     return CLI_PARSE_OK;
 }
 
+static char *sql_strndup_local(const char *src, size_t n) {
+    char *copy = (char *) malloc(n + 1);
+    if (copy == NULL) {
+        return NULL;
+    }
+    memcpy(copy, src, n);
+    copy[n] = '\0';
+    return copy;
+}
+
+static void history_init(InputHistory *history) {
+    memset(history, 0, sizeof(*history));
+}
+
+static void history_free(InputHistory *history) {
+    size_t i;
+    for (i = 0; i < history->count; ++i) {
+        free(history->items[i]);
+        history->items[i] = NULL;
+    }
+    history->count = 0;
+}
+
+static bool is_blank_line_no_newline(const char *text) {
+    const char *p = text;
+    while (*p != '\0') {
+        if (!isspace((unsigned char) *p)) {
+            return false;
+        }
+        p++;
+    }
+    return true;
+}
+
+static bool history_add(InputHistory *history, const char *line_with_newline, char *error, size_t error_size) {
+    char normalized[INTERACTIVE_LINE_MAX];
+    size_t len = 0;
+    char *copy;
+
+    while (line_with_newline[len] != '\0' && line_with_newline[len] != '\n' && line_with_newline[len] != '\r') {
+        if (len + 1 >= sizeof(normalized)) {
+            break;
+        }
+        normalized[len] = line_with_newline[len];
+        len++;
+    }
+    normalized[len] = '\0';
+
+    if (is_blank_line_no_newline(normalized)) {
+        return true;
+    }
+
+    if (history->count > 0 && strcmp(history->items[history->count - 1], normalized) == 0) {
+        return true;
+    }
+
+    copy = sql_strndup_local(normalized, len);
+    if (copy == NULL) {
+        snprintf(error, error_size, "out of memory while storing command history");
+        return false;
+    }
+
+    if (history->count == HISTORY_MAX_ENTRIES) {
+        free(history->items[0]);
+        memmove(&history->items[0], &history->items[1], sizeof(history->items[0]) * (HISTORY_MAX_ENTRIES - 1));
+        history->items[HISTORY_MAX_ENTRIES - 1] = copy;
+        return true;
+    }
+
+    history->items[history->count++] = copy;
+    return true;
+}
+
+static void render_line_prompt(const char *prompt, const char *line, size_t *previous_length) {
+    size_t line_len = strlen(line);
+    size_t i;
+
+    printf("\r%s%s", prompt, line);
+    if (*previous_length > line_len) {
+        for (i = 0; i < *previous_length - line_len; ++i) {
+            putchar(' ');
+        }
+        printf("\r%s%s", prompt, line);
+    }
+    fflush(stdout);
+    *previous_length = line_len;
+}
+
+#if !defined(_WIN32)
+static bool terminal_raw_enable(TerminalGuard *guard, char *error, size_t error_size) {
+    struct termios raw;
+
+    memset(guard, 0, sizeof(*guard));
+
+    if (tcgetattr(STDIN_FILENO, &guard->original) != 0) {
+        snprintf(error, error_size, "failed to read terminal state");
+        return false;
+    }
+
+    raw = guard->original;
+    raw.c_lflag &= (tcflag_t) ~(ICANON | ECHO);
+    raw.c_iflag &= (tcflag_t) ~(IXON | ICRNL);
+    raw.c_cc[VMIN] = 1;
+    raw.c_cc[VTIME] = 0;
+
+    if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) != 0) {
+        snprintf(error, error_size, "failed to set terminal raw mode");
+        return false;
+    }
+
+    guard->enabled = true;
+    return true;
+}
+
+static void terminal_raw_disable(TerminalGuard *guard) {
+    if (guard->enabled) {
+        tcsetattr(STDIN_FILENO, TCSAFLUSH, &guard->original);
+        guard->enabled = false;
+    }
+}
+#endif
+
+static KeyEvent read_key_event(void) {
+    KeyEvent ev;
+    ev.type = KEY_NONE;
+    ev.ch = '\0';
+
+#if defined(_WIN32)
+    {
+        int ch = _getch();
+        if (ch == 13) {
+            ev.type = KEY_ENTER;
+            return ev;
+        }
+        if (ch == 8) {
+            ev.type = KEY_BACKSPACE;
+            return ev;
+        }
+        if (ch == 0 || ch == 224) {
+            int ext = _getch();
+            if (ext == 72) {
+                ev.type = KEY_UP;
+            } else if (ext == 80) {
+                ev.type = KEY_DOWN;
+            }
+            return ev;
+        }
+        if (ch == 26) {
+            ev.type = KEY_EOF;
+            return ev;
+        }
+        if (isprint((unsigned char) ch) != 0 || ch == '\t') {
+            ev.type = KEY_CHAR;
+            ev.ch = (char) ch;
+            return ev;
+        }
+    }
+#else
+    {
+        unsigned char ch = 0;
+        ssize_t n = read(STDIN_FILENO, &ch, 1);
+        if (n <= 0) {
+            ev.type = KEY_EOF;
+            return ev;
+        }
+        if (ch == '\r' || ch == '\n') {
+            ev.type = KEY_ENTER;
+            return ev;
+        }
+        if (ch == 127 || ch == '\b') {
+            ev.type = KEY_BACKSPACE;
+            return ev;
+        }
+        if (ch == 4) {
+            ev.type = KEY_EOF;
+            return ev;
+        }
+        if (ch == 27) {
+            unsigned char seq[2];
+            if (read(STDIN_FILENO, &seq[0], 1) == 1 && read(STDIN_FILENO, &seq[1], 1) == 1) {
+                if (seq[0] == '[' && seq[1] == 'A') {
+                    ev.type = KEY_UP;
+                    return ev;
+                }
+                if (seq[0] == '[' && seq[1] == 'B') {
+                    ev.type = KEY_DOWN;
+                    return ev;
+                }
+            }
+            return ev;
+        }
+        if (isprint(ch) != 0 || ch == '\t') {
+            ev.type = KEY_CHAR;
+            ev.ch = (char) ch;
+            return ev;
+        }
+    }
+#endif
+
+    return ev;
+}
+
+static ReadLineStatus read_line_with_history(
+    const char *prompt,
+    char *line,
+    size_t line_size,
+    InputHistory *history,
+    char *error,
+    size_t error_size
+) {
+    size_t len = 0;
+    size_t previous_length = 0;
+    size_t history_cursor = history->count;
+
+#if !defined(_WIN32)
+    TerminalGuard guard;
+    if (!terminal_raw_enable(&guard, error, error_size)) {
+        return READ_LINE_ERROR;
+    }
+#endif
+
+    line[0] = '\0';
+    render_line_prompt(prompt, line, &previous_length);
+
+    while (true) {
+        KeyEvent ev = read_key_event();
+
+        if (ev.type == KEY_EOF) {
+            if (len == 0) {
+                printf("\n");
+#if !defined(_WIN32)
+                terminal_raw_disable(&guard);
+#endif
+                return READ_LINE_EOF;
+            }
+            ev.type = KEY_ENTER;
+        }
+
+        if (ev.type == KEY_ENTER) {
+            putchar('\n');
+            if (len + 1 >= line_size) {
+#if !defined(_WIN32)
+                terminal_raw_disable(&guard);
+#endif
+                snprintf(error, error_size, "input line too long");
+                return READ_LINE_ERROR;
+            }
+            line[len++] = '\n';
+            line[len] = '\0';
+#if !defined(_WIN32)
+            terminal_raw_disable(&guard);
+#endif
+            return READ_LINE_OK;
+        }
+
+        if (ev.type == KEY_BACKSPACE) {
+            if (len > 0) {
+                len--;
+                line[len] = '\0';
+                render_line_prompt(prompt, line, &previous_length);
+            }
+            continue;
+        }
+
+        if (ev.type == KEY_UP) {
+            if (history_cursor > 0) {
+                history_cursor--;
+                strncpy(line, history->items[history_cursor], line_size - 1);
+                line[line_size - 1] = '\0';
+                len = strlen(line);
+                render_line_prompt(prompt, line, &previous_length);
+            }
+            continue;
+        }
+
+        if (ev.type == KEY_DOWN) {
+            if (history_cursor < history->count) {
+                history_cursor++;
+                if (history_cursor == history->count) {
+                    line[0] = '\0';
+                    len = 0;
+                } else {
+                    strncpy(line, history->items[history_cursor], line_size - 1);
+                    line[line_size - 1] = '\0';
+                    len = strlen(line);
+                }
+                render_line_prompt(prompt, line, &previous_length);
+            }
+            continue;
+        }
+
+        if (ev.type == KEY_CHAR) {
+            if (len + 2 < line_size) {
+                line[len++] = ev.ch;
+                line[len] = '\0';
+                render_line_prompt(prompt, line, &previous_length);
+            }
+            continue;
+        }
+    }
+}
+
 static bool run_interactive(const char *db_root) {
-    char line[2048];
+    char line[INTERACTIVE_LINE_MAX];
     char *buffer = NULL;
     size_t length = 0;
     size_t capacity = 0;
     char error[SQL_ERROR_SIZE];
+    InputHistory history;
+    bool use_line_editor;
+
+    history_init(&history);
+    use_line_editor = is_stdin_tty();
 
     puts("Mini SQL interactive mode");
     puts("Type SQL and end each statement with ';'");
     puts("Type 'exit' or 'quit' to leave.");
 
     while (true) {
-        if (length == 0) {
-            printf("mini_sql> ");
-        } else {
-            printf("...> ");
-        }
-        fflush(stdout);
+        const char *prompt = length == 0 ? "mini_sql> " : "...> ";
+        ReadLineStatus status;
 
-        if (fgets(line, sizeof(line), stdin) == NULL) {
-            if (ferror(stdin)) {
-                perror("input error");
+        if (use_line_editor) {
+            memset(error, 0, sizeof(error));
+            status = read_line_with_history(prompt, line, sizeof(line), &history, error, sizeof(error));
+            if (status == READ_LINE_EOF) {
+                break;
+            }
+            if (status == READ_LINE_ERROR) {
+                if (contains_text_ci(error, "terminal")) {
+                    use_line_editor = false;
+                    continue;
+                }
+                print_error_ko("오류", error, false);
+                history_free(&history);
                 free(buffer);
                 return false;
             }
-            break;
+        } else {
+            if (fgets(line, sizeof(line), stdin) == NULL) {
+                if (ferror(stdin)) {
+                    perror("input error");
+                    history_free(&history);
+                    free(buffer);
+                    return false;
+                }
+                break;
+            }
+        }
+
+        memset(error, 0, sizeof(error));
+        if (!history_add(&history, line, error, sizeof(error))) {
+            print_error_ko("오류", error, false);
+            history_free(&history);
+            free(buffer);
+            return false;
         }
 
         if (length == 0 && is_exit_command(line)) {
@@ -411,6 +784,7 @@ static bool run_interactive(const char *db_root) {
 
         if (!buffer_append(&buffer, &length, &capacity, line)) {
             fprintf(stderr, "error: out of memory while reading input\n");
+            history_free(&history);
             free(buffer);
             return false;
         }
@@ -430,6 +804,7 @@ static bool run_interactive(const char *db_root) {
         }
     }
 
+    history_free(&history);
     free(buffer);
     return true;
 }

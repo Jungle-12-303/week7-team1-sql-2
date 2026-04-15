@@ -37,6 +37,138 @@ static bool g_index_ready = false;
 static uint64_t g_next_id_counter = 0;
 static char *g_active_data_path = NULL;
 static const TableDefinition *g_active_table = NULL;
+static int g_active_student_no_column = -1;
+
+typedef enum {
+    STUDENT_NO_SET_OK = 0,
+    STUDENT_NO_SET_DUPLICATE = 1,
+    STUDENT_NO_SET_ERROR = -1
+} StudentNoSetResult;
+
+typedef struct {
+    char **slots;
+    size_t capacity;
+    size_t count;
+} StudentNoSet;
+
+static StudentNoSet g_student_no_set = {0};
+
+static uint64_t hash_student_no(const char *text) {
+    /* student_no 캐시 해시 함수(FNV-1a) */
+    uint64_t hash = 1469598103934665603ULL;
+    size_t i = 0;
+    while (text[i] != '\0') {
+        hash ^= (unsigned char) text[i];
+        hash *= 1099511628211ULL;
+        i++;
+    }
+    return hash;
+}
+
+static void student_no_set_free(void) {
+    size_t i;
+    if (g_student_no_set.slots != NULL) {
+        for (i = 0; i < g_student_no_set.capacity; ++i) {
+            free(g_student_no_set.slots[i]);
+        }
+    }
+    free(g_student_no_set.slots);
+    g_student_no_set.slots = NULL;
+    g_student_no_set.capacity = 0;
+    g_student_no_set.count = 0;
+}
+
+static bool student_no_set_rehash(size_t new_capacity) {
+    char **new_slots;
+    size_t i;
+
+    new_slots = (char **) calloc(new_capacity, sizeof(char *));
+    if (new_slots == NULL) {
+        return false;
+    }
+
+    for (i = 0; i < g_student_no_set.capacity; ++i) {
+        char *entry = g_student_no_set.slots[i];
+        if (entry != NULL) {
+            size_t mask = new_capacity - 1;
+            size_t probe = (size_t) (hash_student_no(entry) & (uint64_t) mask);
+            while (new_slots[probe] != NULL) {
+                probe = (probe + 1) & mask;
+            }
+            new_slots[probe] = entry;
+        }
+    }
+
+    free(g_student_no_set.slots);
+    g_student_no_set.slots = new_slots;
+    g_student_no_set.capacity = new_capacity;
+    return true;
+}
+
+static bool student_no_set_init(void) {
+    student_no_set_free();
+    g_student_no_set.slots = (char **) calloc(1024, sizeof(char *));
+    if (g_student_no_set.slots == NULL) {
+        return false;
+    }
+    g_student_no_set.capacity = 1024;
+    g_student_no_set.count = 0;
+    return true;
+}
+
+static bool student_no_set_contains(const char *student_no) {
+    size_t mask;
+    size_t probe;
+
+    if (g_student_no_set.capacity == 0 || g_student_no_set.slots == NULL) {
+        return false;
+    }
+
+    mask = g_student_no_set.capacity - 1;
+    probe = (size_t) (hash_student_no(student_no) & (uint64_t) mask);
+    while (g_student_no_set.slots[probe] != NULL) {
+        if (strcmp(g_student_no_set.slots[probe], student_no) == 0) {
+            return true;
+        }
+        probe = (probe + 1) & mask;
+    }
+
+    return false;
+}
+
+static StudentNoSetResult student_no_set_insert(const char *student_no) {
+    size_t mask;
+    size_t probe;
+    char *copy;
+
+    if (g_student_no_set.capacity == 0 || g_student_no_set.slots == NULL) {
+        return STUDENT_NO_SET_ERROR;
+    }
+
+    /* 로드팩터가 0.7 이상이면 확장한다. */
+    if ((g_student_no_set.count + 1) * 10 >= g_student_no_set.capacity * 7) {
+        if (!student_no_set_rehash(g_student_no_set.capacity * 2)) {
+            return STUDENT_NO_SET_ERROR;
+        }
+    }
+
+    mask = g_student_no_set.capacity - 1;
+    probe = (size_t) (hash_student_no(student_no) & (uint64_t) mask);
+    while (g_student_no_set.slots[probe] != NULL) {
+        if (strcmp(g_student_no_set.slots[probe], student_no) == 0) {
+            return STUDENT_NO_SET_DUPLICATE;
+        }
+        probe = (probe + 1) & mask;
+    }
+
+    copy = sql_strdup(student_no);
+    if (copy == NULL) {
+        return STUDENT_NO_SET_ERROR;
+    }
+    g_student_no_set.slots[probe] = copy;
+    g_student_no_set.count++;
+    return STUDENT_NO_SET_OK;
+}
 
 static BptNode *bpt_create_node(bool is_leaf) {
     BptNode *node = (BptNode *) calloc(1, sizeof(BptNode));
@@ -988,6 +1120,8 @@ static bool file_looks_binary(const char *path) {
 
 typedef struct {
     uint64_t max_id;
+    int id_column_index;
+    int student_no_column_index;
     char *error;
     size_t error_size;
 } IndexBuildContext;
@@ -996,12 +1130,40 @@ static int build_index_callback(RowRef ref, const StringList *values, void *ctx)
     IndexBuildContext *context = (IndexBuildContext *) ctx;
     uint64_t id;
     int rc;
+    StudentNoSetResult set_rc;
+    const char *student_no_value;
 
-    (void) ref;
+    if (context->id_column_index < 0 || (size_t) context->id_column_index >= values->count) {
+        snprintf(context->error, context->error_size, "binary row has invalid id column index");
+        return -1;
+    }
 
-    if (values->count == 0 || !parse_u64_strict(values->items[0], &id)) {
+    if (!parse_u64_strict(values->items[context->id_column_index], &id)) {
         snprintf(context->error, context->error_size, "binary row has invalid id column");
         return -1;
+    }
+
+    if (context->student_no_column_index >= 0) {
+        if ((size_t) context->student_no_column_index >= values->count) {
+            snprintf(context->error, context->error_size, "binary row has invalid student_no column index");
+            return -1;
+        }
+
+        student_no_value = values->items[context->student_no_column_index];
+        if (student_no_value == NULL || student_no_value[0] == '\0') {
+            snprintf(context->error, context->error_size, "student_no must not be empty");
+            return -1;
+        }
+
+        set_rc = student_no_set_insert(student_no_value);
+        if (set_rc == STUDENT_NO_SET_DUPLICATE) {
+            snprintf(context->error, context->error_size, "duplicate student_no in data");
+            return -1;
+        }
+        if (set_rc != STUDENT_NO_SET_OK) {
+            snprintf(context->error, context->error_size, "failed to build student_no cache");
+            return -1;
+        }
     }
 
     rc = index_insert(id, ref);
@@ -1026,6 +1188,9 @@ static bool activate_storage_for_table(const TableDefinition *table, char *error
         g_active_table = table;
         return true;
     }
+
+    g_active_student_no_column = -1;
+    student_no_set_free();
 
     free(g_active_data_path);
     g_active_data_path = sql_strdup(table->data_path);
@@ -1104,8 +1269,23 @@ static bool activate_storage_for_table(const TableDefinition *table, char *error
     {
         IndexBuildContext context;
         memset(&context, 0, sizeof(context));
+        context.id_column_index = find_column_index(&table->columns, "id");
+        context.student_no_column_index = find_column_index(&table->columns, "student_no");
         context.error = error;
         context.error_size = error_size;
+
+        if (context.id_column_index < 0) {
+            snprintf(error, error_size, "table must include id column");
+            return false;
+        }
+
+        if (context.student_no_column_index >= 0) {
+            if (!student_no_set_init()) {
+                snprintf(error, error_size, "failed to initialize student_no cache");
+                return false;
+            }
+            g_active_student_no_column = context.student_no_column_index;
+        }
 
         if (binary_reader_scan_all(build_index_callback, &context) != 0) {
             if (error[0] == '\0') {
@@ -1416,6 +1596,8 @@ bool append_insert_row(
     const char *db_root,
     const InsertStatement *statement,
     size_t *affected_rows,
+    StringList *out_insert_columns,
+    StringList *out_insert_values,
     char *error,
     size_t error_size
 ) {
@@ -1424,10 +1606,20 @@ bool append_insert_row(
     bool *assigned_columns = NULL;
     size_t i;
     int id_column_index;
+    int student_no_column_index;
     uint64_t generated_id;
     char id_buffer[32];
     RowRef ref;
     int idx_rc;
+    StudentNoSetResult student_no_rc;
+    const char *student_no_value = NULL;
+
+    if (out_insert_columns != NULL) {
+        memset(out_insert_columns, 0, sizeof(*out_insert_columns));
+    }
+    if (out_insert_values != NULL) {
+        memset(out_insert_values, 0, sizeof(*out_insert_values));
+    }
 
     if (statement->columns.count != statement->values.count) {
         snprintf(error, error_size, "INSERT column count and value count do not match");
@@ -1504,6 +1696,35 @@ bool append_insert_row(
         return false;
     }
 
+    student_no_column_index = find_column_index(&table.columns, "student_no");
+    if (student_no_column_index >= 0) {
+        /* student_no는 업무키이므로 필수 입력 + 유일성 보장을 강제한다. */
+        if (!assigned_columns[student_no_column_index]) {
+            string_list_free(&ordered_values);
+            free(assigned_columns);
+            free_table_definition(&table);
+            snprintf(error, error_size, "student_no is required in INSERT");
+            return false;
+        }
+
+        student_no_value = ordered_values.items[student_no_column_index];
+        if (student_no_value == NULL || student_no_value[0] == '\0') {
+            string_list_free(&ordered_values);
+            free(assigned_columns);
+            free_table_definition(&table);
+            snprintf(error, error_size, "student_no must not be empty");
+            return false;
+        }
+
+        if (g_active_student_no_column == student_no_column_index && student_no_set_contains(student_no_value)) {
+            string_list_free(&ordered_values);
+            free(assigned_columns);
+            free_table_definition(&table);
+            snprintf(error, error_size, "duplicate student_no: already inserted value");
+            return false;
+        }
+    }
+
     generated_id = next_id();
     snprintf(id_buffer, sizeof(id_buffer), "%llu", (unsigned long long) generated_id);
 
@@ -1530,8 +1751,62 @@ bool append_insert_row(
         string_list_free(&ordered_values);
         free(assigned_columns);
         free_table_definition(&table);
-        snprintf(error, error_size, "failed to update id index");
+        if (idx_rc == 1) {
+            snprintf(error, error_size, "duplicate key: already inserted value");
+        } else {
+            snprintf(error, error_size, "failed to update id index");
+        }
         return false;
+    }
+
+    if (student_no_column_index >= 0 && student_no_value != NULL) {
+        student_no_rc = student_no_set_insert(student_no_value);
+        if (student_no_rc == STUDENT_NO_SET_DUPLICATE) {
+            string_list_free(&ordered_values);
+            free(assigned_columns);
+            free_table_definition(&table);
+            snprintf(error, error_size, "duplicate student_no: already inserted value");
+            return false;
+        }
+        if (student_no_rc != STUDENT_NO_SET_OK) {
+            string_list_free(&ordered_values);
+            free(assigned_columns);
+            free_table_definition(&table);
+            snprintf(error, error_size, "failed to update student_no cache after insert");
+            return false;
+        }
+    }
+
+    if (out_insert_columns != NULL) {
+        for (i = 0; i < table.columns.count; ++i) {
+            if (!string_list_append(out_insert_columns, table.columns.items[i])) {
+                string_list_free(&ordered_values);
+                string_list_free(out_insert_columns);
+                if (out_insert_values != NULL) {
+                    string_list_free(out_insert_values);
+                }
+                free(assigned_columns);
+                free_table_definition(&table);
+                snprintf(error, error_size, "out of memory while preparing INSERT result");
+                return false;
+            }
+        }
+    }
+
+    if (out_insert_values != NULL) {
+        for (i = 0; i < ordered_values.count; ++i) {
+            if (!string_list_append(out_insert_values, ordered_values.items[i])) {
+                string_list_free(&ordered_values);
+                if (out_insert_columns != NULL) {
+                    string_list_free(out_insert_columns);
+                }
+                string_list_free(out_insert_values);
+                free(assigned_columns);
+                free_table_definition(&table);
+                snprintf(error, error_size, "out of memory while preparing INSERT result");
+                return false;
+            }
+        }
     }
 
     *affected_rows = 1;

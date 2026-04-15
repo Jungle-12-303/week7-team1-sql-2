@@ -1,4 +1,4 @@
-# 데모 시연 시나리오 (발표자용)
+﻿# 데모 시연 시나리오 (발표자용)
 
 ## 목적
 이 시연은 다음 4가지를 눈으로 확인시키는 데 목적이 있습니다.
@@ -39,6 +39,29 @@ docker run --rm week7-mini-sql
 ### 발표 멘트
 - "INSERT 시 id를 입력하지 않아도 자동으로 부여됩니다."
 - "id 조건은 인덱스 경로로, 일반 조건은 선형 스캔 경로로 분기됩니다."
+
+## 2-1단계: Docker Only 인터랙티브 CLI 실행 (PowerShell)
+### 명령어
+```powershell
+# 1) 이미지 빌드
+docker build -t week7-mini-sql .
+
+# 2) 인터랙티브(우리 SQL CLI)
+docker run --rm -it -v "${PWD}:/work" week7-mini-sql -d /work/examples/db -i
+```
+
+### 인터랙티브 안에서 입력
+```sql
+SELECT * FROM demo.students;
+```
+
+### 화면에서 기대할 결과
+- `mini_sql>` 프롬프트가 표시된다.
+- SQL 실행 결과 테이블이 출력된다.
+- `exit` 또는 `quit`으로 정상 종료된다.
+
+### 발표 멘트
+- "PowerShell 프롬프트에서 SQL을 직접 치는 것이 아니라, mini_sql 프롬프트 안에서 SQL을 입력합니다."
 
 ## 3단계: CLI 범위 조회 시연
 ### 명령어
@@ -116,7 +139,7 @@ Relative speedup: Case A is 2.0x faster than Case B
 ### 발표 멘트
 - "동일한 Docker 환경에서 100만 건 삽입 후 B+ 트리 경로(Case A)와 선형 경로(Case B)를 분리 측정했습니다."
 - "동일 조건에서 id 경로가 선형 스캔 대비 약 2배 빨랐고, 출력 라벨로 경로 자체를 함께 검증했습니다."
-- "PowerShell quoting 이슈를 피하기 위해 벤치는 `scripts/bench_docker.ps1` 단일 명령으로 실행합니다."
+<!-- - "PowerShell quoting 이슈를 피하기 위해 벤치는 `scripts/bench_docker.ps1` 단일 명령으로 실행합니다." -->
 
 ## Q&A 빠른 답변
 - 왜 id만 인덱스 최적화했나요?
