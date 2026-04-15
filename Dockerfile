@@ -18,4 +18,4 @@ COPY --from=build /app/build/mini_sql ./build/mini_sql
 COPY --from=build /app/examples ./examples
 
 ENTRYPOINT ["./build/mini_sql"]
-CMD ["examples/db", "examples/sql/demo_workflow.sql"]
+CMD ["examples/db"]
