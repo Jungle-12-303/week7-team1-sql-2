@@ -1,5 +1,6 @@
 param(
     [int]$Rows = 1000000,
+    [int]$Runs = 5,
     [int]$TargetId = 777777,
     [string]$Image = "week7-mini-sql"
 )
@@ -13,46 +14,112 @@ $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 
 New-Item -ItemType Directory -Force $tmpDir | Out-Null
 
-$script = @"
-set -e
-mkdir -p /tmp/bench/demo /tmp/sql
-echo "id|name|major|grade" > /tmp/bench/demo/students.schema
-: > /tmp/bench/demo/students.data
+$lines = @(
+    "set -euo pipefail",
+    "mkdir -p /tmp/bench/demo /tmp/sql",
+    "echo ""id|name|major|grade"" > /tmp/bench/demo/students.schema",
+    ": > /tmp/bench/demo/students.data",
+    "",
+    "now_ms() {",
+    "  date +%s%3N",
+    "}",
+    "",
+    "avg_ms() {",
+    "  awk '{sum+=`$1; n+=1} END { if (n==0) print ""0.000""; else printf ""%.3f"", sum/n }' ""`$1""",
+    "}",
+    "",
+    "p95_ms() {",
+    "  file=""`$1""",
+    "  n=`$(wc -l < ""`$file"")",
+    "  if [ ""`$n"" -le 0 ]; then",
+    "    echo ""0.000""",
+    "    return",
+    "  fi",
+    "  idx=`$(( (`$n * 95 + 99) / 100 ))",
+    "  sort -n ""`$file"" | sed -n ""`${idx}p""",
+    "}",
+    "",
+    "for i in `$(seq 1 $Rows); do",
+    "  printf ""INSERT INTO demo.students (name, major, grade) VALUES ('U%s', 'M%s', 'A');\n"" ""`$i"" ""`$((i%10))""",
+    "done > /tmp/sql/insert.sql",
+    "",
+    "t0=`$(now_ms)",
+    "/app/build/mini_sql /tmp/bench /tmp/sql/insert.sql >/tmp/out_insert.txt",
+    "t1=`$(now_ms)",
+    "",
+    "insert_ms=`$((t1-t0))",
+    "",
+    ": > /tmp/sql/id_times.txt",
+    ": > /tmp/sql/linear_times.txt",
+    "",
+    "for r in `$(seq 1 $Runs); do",
+    "  id=`$(( ((r * 7919) % $Rows) + 1 ))",
+    "  echo ""SELECT name FROM demo.students WHERE id = `$id;"" > /tmp/sql/q_id.sql",
+    "  echo ""SELECT name FROM demo.students WHERE major = 'M5';"" > /tmp/sql/q_lin.sql",
+    "",
+    "  t2=`$(now_ms)",
+    "  /app/build/mini_sql /tmp/bench /tmp/sql/q_id.sql >/tmp/out_id.txt",
+    "  t3=`$(now_ms)",
+    "  echo `$((t3-t2)) >> /tmp/sql/id_times.txt",
+    "",
+    "  t4=`$(now_ms)",
+    "  /app/build/mini_sql /tmp/bench /tmp/sql/q_lin.sql >/tmp/out_lin.txt",
+    "  t5=`$(now_ms)",
+    "  echo `$((t5-t4)) >> /tmp/sql/linear_times.txt",
+    "done",
+    "",
+    "id_avg=`$(avg_ms /tmp/sql/id_times.txt)",
+    "id_p95=`$(p95_ms /tmp/sql/id_times.txt)",
+    "linear_avg=`$(avg_ms /tmp/sql/linear_times.txt)",
+    "linear_p95=`$(p95_ms /tmp/sql/linear_times.txt)",
+    "speedup=`$(awk -v a=""`$id_avg"" -v b=""`$linear_avg"" 'BEGIN { if (a <= 0.0001) print ""0.00""; else printf ""%.2f"", b/a }')",
+    "",
+    "max_ms=`$(printf ""%s\n%s"" ""`$id_avg"" ""`$linear_avg"" | sort -n | tail -n 1)",
+    "if awk -v m=""`$max_ms"" 'BEGIN { exit !(m <= 0.0001) }'; then",
+    "  max_ms=1",
+    "fi",
+    "",
+    "make_bar() {",
+    "  val=`$1",
+    "  width=40",
+    "  len=`$(awk -v v=""`$val"" -v m=""`$max_ms"" -v w=""`$width"" 'BEGIN { n=int((v*w)/m + 0.999); if (n<0) n=0; if (n>w) n=w; print n }')",
+    "  bar=""""",
+    "  i=0",
+    "  while [ `$i -lt `$len ]; do",
+    "    bar=""`$bar=""",
+    "    i=`$((i + 1))",
+    "  done",
+    "  while [ `$i -lt `$width ]; do",
+    "    bar=""`$bar.""",
+    "    i=`$((i + 1))",
+    "  done",
+    "  printf ""%s"" ""`$bar""",
+    "}",
+    "",
+    "id_bar=`$(make_bar ""`$id_avg"")",
+    "linear_bar=`$(make_bar ""`$linear_avg"")",
+    "",
+    "echo ""rows=$Rows""",
+    "echo ""runs=$Runs""",
+    "echo ""target_id_example=$TargetId""",
+    "echo ""insert_total_ms=`$insert_ms""",
+    "echo ""id_query_avg_ms=`$id_avg""",
+    "echo ""id_query_p95_ms=`$id_p95""",
+    "echo ""linear_query_avg_ms=`$linear_avg""",
+    "echo ""linear_query_p95_ms=`$linear_p95""",
+    "echo ""speedup_linear_over_id=`$speedup""",
+    "echo ""case_a_path=B+TREE_ID_INDEX""",
+    "echo ""case_b_path=LINEAR_SCAN_MAJOR""",
+    "echo ""--- case A result (B+ tree id index) ---""",
+    "tail -n 5 /tmp/out_id.txt",
+    "echo ""--- case B result (linear scan) ---""",
+    "tail -n 5 /tmp/out_lin.txt",
+    "echo ""--- text bar chart (query latency avg, lower is better) ---""",
+    "echo ""Case A (B+ tree id index) : `$id_avg ms [`$id_bar]""",
+    "echo ""Case B (linear scan)      : `$linear_avg ms [`$linear_bar]"""
+)
 
-now_ms() {
-  date +%s%3N
-}
-
-for i in `$(seq 1 $Rows); do
-  printf "INSERT INTO demo.students (name, major, grade) VALUES ('U%s', 'M%s', 'A');\n" "`$i" "`$((i%10))"
-done > /tmp/sql/insert.sql
-
-t0=`$(now_ms)
-/app/build/mini_sql /tmp/bench /tmp/sql/insert.sql >/tmp/out_insert.txt
-t1=`$(now_ms)
-
-echo "SELECT name FROM demo.students WHERE id = $TargetId;" > /tmp/sql/q_id.sql
-echo "SELECT name FROM demo.students WHERE major = 'M5';" > /tmp/sql/q_lin.sql
-
-t2=`$(now_ms)
-/app/build/mini_sql /tmp/bench /tmp/sql/q_id.sql >/tmp/out_id.txt
-t3=`$(now_ms)
-
-t4=`$(now_ms)
-/app/build/mini_sql /tmp/bench /tmp/sql/q_lin.sql >/tmp/out_lin.txt
-t5=`$(now_ms)
-
-echo "insert_total_ms=`$((t1-t0))"
-echo "id_query_ms=`$((t3-t2))"
-echo "linear_query_ms=`$((t5-t4))"
-echo "case_a_path=B+TREE_ID_INDEX"
-echo "case_b_path=LINEAR_SCAN_MAJOR"
-echo "--- case A result (B+ tree id index) ---"
-tail -n 5 /tmp/out_id.txt
-echo "--- case B result (linear scan) ---"
-tail -n 5 /tmp/out_lin.txt
-"@
-
+$script = [string]::Join("`n", $lines) + "`n"
 [System.IO.File]::WriteAllText($shPath, $script, $utf8NoBom)
 
 $wd = (Get-Location).Path

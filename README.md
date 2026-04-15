@@ -70,26 +70,26 @@ docker build -t week7-mini-sql .
 
 ### 예시 결과 (2026-04-15)
 - `insert_total_ms=16000`
-- `id_query_ms=1000`
-- `linear_query_ms=2000`
+- `id_query_ms=540`
+- `linear_query_ms=958`
 - `case_a_path=B+TREE_ID_INDEX`
 - `case_b_path=LINEAR_SCAN_MAJOR`
 
 ### A/B 비교 표
 | 항목 | 측정값 | 해석 |
 | --- | ---: | --- |
-| Case A: `WHERE id = ?` (B+ 트리) | 1000ms | 단건 키 조회가 빠르게 수행됨 |
-| Case B: `WHERE major = ?` (선형) | 2000ms | 전체 레코드 스캔으로 시간이 더 소요됨 |
-| 속도비 (B/A) | 2.0x | B+ 트리 경로가 약 2배 빠름 |
+| Case A: `WHERE id = ?` (B+ 트리) | 540ms | 단건 키 조회가 빠르게 수행됨 |
+| Case B: `WHERE major = ?` (선형) | 958ms | 전체 레코드 스캔으로 시간이 더 소요됨 |
+| 속도비 (B/A) | 1.77x | B+ 트리 경로가 약 1.77배 빠름 |
 
 ### 시각 자료 (텍스트 바 차트)
 ```text
 Query Latency (lower is better)
 
-Case A (B+ tree id index) : 1000 ms |████████████████████
-Case B (linear scan)      : 2000 ms |████████████████████████████████████████
+Case A (B+ tree id index) :  540 ms |#######################
+Case B (linear scan)      :  958 ms |########################################
 
-Relative speedup: Case A is 2.0x faster than Case B
+Relative speedup: Case A is about 1.77x faster than Case B
 ```
 
 ## 7. 실행 방법
