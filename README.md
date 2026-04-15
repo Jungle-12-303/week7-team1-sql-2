@@ -66,16 +66,40 @@ flowchart TD
         I4["Internal<br/>12 | 13"]
     end
 
+    subgraph Level2[" "]
+        direction LR
+        A1["Leaf<br/>1 | 2<br/>0x10 | 0x20"]
+        A2["Leaf<br/>3<br/>0x30"]
+        B1["Leaf<br/>4 | 5<br/>0x40 | 0x50"]
+        B2["Leaf<br/>7<br/>0x70"]
+        C1["Leaf<br/>8 | 9<br/>0x80 | 0x90"]
+        C2["Leaf<br/>10<br/>0xA0"]
+        D1["Leaf<br/>11 | 12<br/>0xB0 | 0xC0"]
+        D2["Leaf<br/>13 | 14 | 15<br/>0xD0 | 0xE0 | 0xF0"]
+    end
+
     R0 --> I1
     R0 --> I2
     R0 --> I3
     R0 --> I4
 
+    I1 --> A1
+    I1 --> A2
+    I2 --> B1
+    I2 --> B2
+    I3 --> C1
+    I3 --> C2
+    I4 --> D1
+    I4 --> D2
+
     classDef root fill:#166534,stroke:#dcfce7,stroke-width:3px,color:#f9fafb;
     classDef internal fill:#15803d,stroke:#dcfce7,stroke-width:2px,color:#f9fafb;
+    classDef leaf fill:#22c55e,stroke:#dcfce7,stroke-width:2px,color:#052e16;
     linkStyle 0,1,2,3 stroke:#86efac,stroke-width:2.5px;
+    linkStyle 4,5,6,7,8,9,10,11 stroke:#86efac,stroke-width:2px;
     class R0 root;
     class I1,I2,I3,I4 internal;
+    class A1,A2,B1,B2,C1,C2,D1,D2 leaf;
 ```
 
 ```mermaid
@@ -469,6 +493,30 @@ SELECT * FROM demo.students WHERE major = "CS";
 | --- | ---: | --- |
 | `WHERE id = ?` | 540 ms | B+ Tree Index |
 | `WHERE major = ?` | 958 ms | Linear Scan |
+
+```mermaid
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "background": "#0b1020",
+    "primaryColor": "#111827",
+    "primaryTextColor": "#f9fafb",
+    "primaryBorderColor": "#f9fafb",
+    "lineColor": "#e5e7eb",
+    "secondaryColor": "#1f2937",
+    "secondaryTextColor": "#f9fafb",
+    "tertiaryColor": "#0f172a",
+    "tertiaryTextColor": "#f9fafb"
+  }
+}}%%
+xychart-beta
+    title "SELECT Latency Comparison"
+    x-axis ["WHERE id = ?", "WHERE major = ?"]
+    y-axis "ms" 0 --> 1000
+    bar [540, 958]
+```
+
+- 속도비: `WHERE id = ?` 경로가 약 `1.77x` 더 빠름
 
 #### 해석 포인트
 
