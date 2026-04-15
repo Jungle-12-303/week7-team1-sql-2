@@ -1,133 +1,521 @@
-# Week7 Mini SQL (Binary + Auto ID + B+ Tree Index)
+# B+ Tree Index Mini SQL
 
-이 프로젝트는 기존 텍스트 기반 `.data` 저장을 바이너리 포맷으로 전환하고,
-`INSERT` 시 자동 ID를 부여한 뒤 해당 ID를 메모리 기반 B+ 트리에 등록하여
-`WHERE id = ?`를 인덱스 경로로 빠르게 처리하도록 확장한 버전입니다.
+- 기존 Mini SQL 처리기에 `?�동 ID`, `바이?�리 ?�??, `메모�?기반 B+ Tree ?�덱??�?결합???�로?�트
+- `WHERE id = ?` �?`WHERE id` 범위 조건???�덱??경로�?처리
+- 비인?�스 조건?� ?�형 ?�색?�로 처리
+- 1,000,000�??�상 ?�이??기�? ?�능 비교 ?�행
 
-실행/검증 기준 환경은 Docker입니다.
+## 1. ?�비??
 
-## 1. 목표와 범위
-- `.data` 텍스트 저장 -> 바이너리 저장 전환
-- `INSERT` 시 `id` 자동 부여
-- 자동 부여된 `id -> row_ref(byte offset)`를 B+ 트리에 등록
-- `WHERE id = ?` 및 `WHERE id >, >=, <, <= ?` 인덱스 조회 분기
-- 텍스트 데이터 자동 마이그레이션(일회성)
-- 테스트/벤치/데모 문서 반영
+### 1-1. ??�??�명
 
-## 2. 저장 포맷
-바이너리 레코드 포맷(v1):
-- `uint32 field_count`
-- 각 필드: `uint32 byte_length + raw bytes(UTF-8)`
+- `INSERT` ???�동?�로 ID�?부?�하�??�당 ID�?B+ Tree ?�덱?�에 ?�록??`WHERE id = ?` 조회�?빠르�?처리?�는 Mini SQL ?�진
 
-`row_ref`는 레코드 시작 바이트 오프셋입니다.
+### 1-2. ?�로?�트 목표
 
-## 3. 실행 흐름
-- INSERT: `auto id 생성 -> binary append -> bptree_insert`
-- SELECT (`WHERE id = ?`): `index_find -> row_ref direct read`
-- SELECT (`WHERE id >, >=, <, <= ?`): `B+ 트리 리프 순회 -> row_ref direct read`
-- SELECT (그 외): 바이너리 파일 선형 스캔
+- 기존 SQL 처리기의 ?�형 ?�색 기반 조회 구조 ?�장
+- `WHERE id = ?` 조건?�서 ?�덱???�용 가?�하?�록 개선
+- ?�?�량 ?�이?�에???�덱??조회?� ?�형 ?�색??차이 검�?
+- 기존 SQL 처리기�? ?�덱??구조???�연?�러???�결
 
-## 3-1. B+ 트리 인덱스
-- 구현 방식: 디스크 기반이 아닌 메모리 기반 B+ 트리
-- 키: `id(uint64_t)`
-- 값: `row_ref(byte offset)`
-- 리프 노드 분할 시 오른쪽 리프의 최소 키를 부모에 승격
-- 내부 노드 분할 시 중앙 키를 부모에 승격
-- 중복 ID는 삽입 거부
+### 1-3. 지??기능
 
-## 4. 마이그레이션
-실행 시 `.data`가 텍스트 포맷으로 감지되면:
-1. `students.data.bin.tmp`에 바이너리 변환
-2. 기존 텍스트를 `students.data.text.bak`로 백업
-3. 바이너리 파일을 `students.data`로 교체
+- `INSERT`
+- `SELECT *`
+- `SELECT ... WHERE id = ?`
+- `SELECT ... WHERE id > ?`, `>= ?`, `< ?`, `<= ?`
+- `SELECT ... WHERE major = ?` ??비인?�스 조건 조회
+- CLI 기반 SQL ?�력 �??�행
+- ?�???�이???�입 �??�능 측정
 
-검증 스크립트:
-- `scripts/verify_migration.ps1`
+### 1-4. ?�이???�??구조
 
-## 5. 테스트
-단위 테스트(`tests/test_runner.c`)에서 다음을 검증합니다.
-- 파서 INSERT/SELECT-WHERE 파싱
-- `index_init/index_insert/index_find`
-- 자동 ID 증가와 `WHERE id` 조회
-- `WHERE id >= ?`, `WHERE id <= ?` 범위 조회
-- 일반 조건 선형 스캔(`WHERE major = ?`)
-- 없는 id 조회 빈 결과
-- 텍스트->바이너리 마이그레이션 후 조회 일치
+- 바이?�리 row ?�맷 ?�용
+- �?row�??�일 ??`row offset`?�로 직접 ?�근
+- B+ Tree??`id -> row offset` 매핑 ?��?
+- ?�덱??조회 ???�일 ?�체�??�회?��? ?�고 row ?�치�?직접 ?�동
 
-실행:
-```bash
-docker build -t week7-mini-sql .
+?�순 B+ Tree 구조
+
+```mermaid
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "background": "#0b1020",
+    "primaryColor": "#111827",
+    "primaryTextColor": "#f9fafb",
+    "primaryBorderColor": "#f9fafb",
+    "lineColor": "#e5e7eb",
+    "secondaryColor": "#1f2937",
+    "secondaryTextColor": "#f9fafb",
+    "tertiaryColor": "#111827",
+    "tertiaryTextColor": "#f9fafb"
+  }
+}}%%
+flowchart TD
+    subgraph Level0[" "]
+        direction LR
+        R0["Root<br/>4 | 8 | 11"]
+    end
+
+    subgraph Level1[" "]
+        direction LR
+        I1["Internal<br/>2 | 3"]
+        I2["Internal<br/>5 | 7"]
+        I3["Internal<br/>9 | 10"]
+        I4["Internal<br/>12 | 13"]
+    end
+
+    R0 --> I1
+    R0 --> I2
+    R0 --> I3
+    R0 --> I4
+
+    classDef root fill:#166534,stroke:#dcfce7,stroke-width:3px,color:#f9fafb;
+    classDef internal fill:#15803d,stroke:#dcfce7,stroke-width:2px,color:#f9fafb;
+    linkStyle 0,1,2,3 stroke:#86efac,stroke-width:2.5px;
+    class R0 root;
+    class I1,I2,I3,I4 internal;
 ```
 
-`docker build` 단계에서 `make`와 `make test`가 함께 수행됩니다.
+```mermaid
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "background": "#0b1020",
+    "primaryColor": "#111827",
+    "primaryTextColor": "#f9fafb",
+    "primaryBorderColor": "#f9fafb",
+    "lineColor": "#e5e7eb",
+    "secondaryColor": "#1f2937",
+    "secondaryTextColor": "#f9fafb",
+    "tertiaryColor": "#111827",
+    "tertiaryTextColor": "#f9fafb"
+  }
+}}%%
+flowchart LR
+    A1["1 | 2"] --> A2["3"] --> B1["4 | 5"] --> B2["7"] --> C1["8 | 9"] --> C2["10"] --> D1["11 | 12"] --> D2["13 | 14 | 15"]
 
-## 6. 벤치마크 (100만 건)
-벤치마크는 Docker 기준으로 실행합니다.
-실행 명령은 `docs/demo/demo_commands_only.md`의 "100만 건 벤치마크 (Docker)" 섹션을 사용하세요.
-
-측정 항목:
-- Case A: `WHERE id = ?` (B+ 트리 인덱스)
-- Case B: `WHERE major = ?` (선형 탐색)
-- Case C: 텍스트 삽입 시뮬레이션 대비 바이너리 삽입 시간
-
-### 예시 결과 (2026-04-15)
-- `insert_total_ms=16000`
-- `id_query_ms=540`
-- `linear_query_ms=958`
-- `case_a_path=B+TREE_ID_INDEX`
-- `case_b_path=LINEAR_SCAN_MAJOR`
-
-### A/B 비교 표
-| 항목 | 측정값 | 해석 |
-| --- | ---: | --- |
-| Case A: `WHERE id = ?` (B+ 트리) | 540ms | 단건 키 조회가 빠르게 수행됨 |
-| Case B: `WHERE major = ?` (선형) | 958ms | 전체 레코드 스캔으로 시간이 더 소요됨 |
-| 속도비 (B/A) | 1.77x | B+ 트리 경로가 약 1.77배 빠름 |
-
-### 시각 자료 (텍스트 바 차트)
-```text
-Query Latency (lower is better)
-
-Case A (B+ tree id index) :  540 ms |#######################
-Case B (linear scan)      :  958 ms |########################################
-
-Relative speedup: Case A is about 1.77x faster than Case B
+    classDef leaf fill:#22c55e,stroke:#dcfce7,stroke-width:2px,color:#052e16;
+    linkStyle 0,1,2,3,4,5,6 stroke:#bbf7d0,stroke-width:2px;
+    class A1,A2,B1,B2,C1,C2,D1,D2 leaf;
 ```
 
-## 7. 실행 방법
-빌드:
-```bash
-docker build -t week7-mini-sql .
+Leaf -> Binary Row 매핑
+
+```mermaid
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "background": "#0b1020",
+    "primaryColor": "#111827",
+    "primaryTextColor": "#f9fafb",
+    "primaryBorderColor": "#f9fafb",
+    "lineColor": "#e5e7eb",
+    "secondaryColor": "#1f2937",
+    "secondaryTextColor": "#f9fafb",
+    "tertiaryColor": "#111827",
+    "tertiaryTextColor": "#f9fafb"
+  }
+}}%%
+flowchart TD
+    subgraph OffsetLevel[" "]
+        direction LR
+        O1["0x10"]
+        O2["0x20"]
+        O3["0x30"]
+        O4["0x40"]
+        O5["0x50"]
+        O7["0x70"]
+        O8["0x80"]
+        O9["0x90"]
+        O10["0xA0"]
+        O11["0xB0"]
+        O12["0xC0"]
+        O13["0xD0"]
+        O14["0xE0"]
+        O15["0xF0"]
+    end
+
+    subgraph RowLevel[" "]
+        direction LR
+        D1["0x10<br/>id=1<br/>name=Kim<br/>major=CS"]
+        D2["0x20<br/>id=2<br/>name=Lee<br/>major=Math"]
+        D3["0x30<br/>id=3<br/>name=Park<br/>major=Physics"]
+        D4["0x40<br/>id=4<br/>name=Choi<br/>major=CS"]
+        D5["0x50<br/>id=5<br/>name=Jung<br/>major=Biology"]
+        D7["0x70<br/>id=7<br/>name=Han<br/>major=Economics"]
+        D8["0x80<br/>id=8<br/>name=Lim<br/>major=CS"]
+        D9["0x90<br/>id=9<br/>name=Kang<br/>major=Math"]
+        D10["0xA0<br/>id=10<br/>name=Yoon<br/>major=Design"]
+        D11["0xB0<br/>id=11<br/>name=Seo<br/>major=CS"]
+        D12["0xC0<br/>id=12<br/>name=Shin<br/>major=Chemistry"]
+        D13["0xD0<br/>id=13<br/>name=Hwang<br/>major=History"]
+        D14["0xE0<br/>id=14<br/>name=Oh<br/>major=Math"]
+        D15["0xF0<br/>id=15<br/>name=Song<br/>major=CS"]
+    end
+
+    O1 -.-> D1
+    O2 -.-> D2
+    O3 -.-> D3
+    O4 -.-> D4
+    O5 -.-> D5
+    O7 -.-> D7
+    O8 -.-> D8
+    O9 -.-> D9
+    O10 -.-> D10
+    O11 -.-> D11
+    O12 -.-> D12
+    O13 -.-> D13
+    O14 -.-> D14
+    O15 -.-> D15
+
+    classDef offset fill:#111827,stroke:#cbd5e1,stroke-width:2px,color:#f9fafb;
+    classDef data fill:#374151,stroke:#d1d5db,stroke-width:2px,color:#f9fafb;
+    linkStyle 0,1,2,3,4,5,6,7,8,9,10,11,12,13 stroke:#d1d5db,stroke-width:2px,stroke-dasharray: 4 4;
+    class O1,O2,O3,O4,O5,O7,O8,O9,O10,O11,O12,O13,O14,O15 offset;
+    class D1,D2,D3,D4,D5,D7,D8,D9,D10,D11,D12,D13,D14,D15 data;
 ```
 
-인터랙티브 모드:
-```bash
-docker run -it --rm week7-mini-sql
+## 2. ?�이?�라??
+
+### 2-1. ?�체 처리 ?�름
+
+```mermaid
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "background": "#0b1020",
+    "primaryColor": "#111827",
+    "primaryTextColor": "#f9fafb",
+    "primaryBorderColor": "#f9fafb",
+    "lineColor": "#e5e7eb",
+    "secondaryColor": "#1f2937",
+    "secondaryTextColor": "#f9fafb",
+    "tertiaryColor": "#0f172a",
+    "tertiaryTextColor": "#f9fafb"
+  }
+}}%%
+flowchart LR
+    A["SQL Input"] --> B["Parser"]
+    B --> C["Executor"]
+    C --> D{"Query Type"}
+    D -->|INSERT| E["Auto ID Assignment"]
+    E --> F["Binary Row Append"]
+    F --> G["B+ Tree Index Update"]
+    D -->|SELECT WHERE id| H["B+ Tree Search"]
+    H --> I["Direct Row Read by Offset"]
+    D -->|SELECT other field| J["Linear Scan"]
+    I --> K["Result Output"]
+    J --> K
+
+    classDef box fill:#111827,stroke:#f9fafb,stroke-width:2px,color:#f9fafb;
+    classDef decision fill:#1e3a8a,stroke:#bfdbfe,stroke-width:2px,color:#eff6ff;
+    class A,B,C,E,F,G,H,I,J,K box;
+    class D decision;
 ```
 
-프롬프트에서 SQL을 직접 입력:
+### 2-2. INSERT ?�이?�라??
+
+- SQL ?�력
+- Parser?�서 INSERT 구문 ?�석
+- Executor?�서 ?�음 ID ?�성
+- Storage??바이?�리 row append
+- append 결과�?`row offset` ?�득
+- B+ Tree??`(id, row offset)` ?�록
+
+```mermaid
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "background": "#0b1020",
+    "primaryColor": "#111827",
+    "primaryTextColor": "#f9fafb",
+    "primaryBorderColor": "#f9fafb",
+    "lineColor": "#e5e7eb",
+    "secondaryColor": "#1f2937",
+    "secondaryTextColor": "#f9fafb",
+    "tertiaryColor": "#111827",
+    "tertiaryTextColor": "#f9fafb",
+    "actorBkg": "#111827",
+    "actorBorder": "#f9fafb",
+    "actorTextColor": "#f9fafb",
+    "signalColor": "#e5e7eb",
+    "signalTextColor": "#f9fafb",
+    "labelBoxBkgColor": "#111827",
+    "labelBoxBorderColor": "#f9fafb",
+    "labelTextColor": "#f9fafb",
+    "loopTextColor": "#f9fafb",
+    "noteBkgColor": "#1f2937",
+    "noteBorderColor": "#f9fafb",
+    "noteTextColor": "#f9fafb",
+    "activationBorderColor": "#f9fafb",
+    "activationBkgColor": "#1d4ed8"
+  }
+}}%%
+sequenceDiagram
+    participant U as User
+    participant P as Parser
+    participant E as Executor
+    participant S as Storage
+    participant B as B+ Tree
+
+    U->>P: INSERT INTO ...
+    P->>E: Parsed INSERT query
+    E->>E: Generate next id
+    E->>S: Append row in binary format
+    S-->>E: Return row offset
+    E->>B: Insert (id, row offset)
+    E-->>U: Insert success
+```
+
+### 2-3. SELECT ?�이?�라??
+
+- `WHERE id = ?` ?�는 `WHERE id` 범위 조건?� B+ Tree ?�덱??경로 ?�용
+- ?�덱??경로??B+ Tree?�서 row offset ?�색 ??offset 기반 direct read ?�행
+- `WHERE major = ?` 같�? 비인?�스 조건?� B+ Tree�?거치지 ?�음
+- 비인?�스 경로???�체 row�??�형 ?�색?�며 조건 비교 ?�행
+
+```mermaid
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "background": "#0b1020",
+    "primaryColor": "#111827",
+    "primaryTextColor": "#f9fafb",
+    "primaryBorderColor": "#f9fafb",
+    "lineColor": "#e5e7eb",
+    "secondaryColor": "#1f2937",
+    "secondaryTextColor": "#f9fafb",
+    "tertiaryColor": "#111827",
+    "tertiaryTextColor": "#f9fafb",
+    "actorBkg": "#111827",
+    "actorBorder": "#f9fafb",
+    "actorTextColor": "#f9fafb",
+    "signalColor": "#e5e7eb",
+    "signalTextColor": "#f9fafb",
+    "labelBoxBkgColor": "#111827",
+    "labelBoxBorderColor": "#f9fafb",
+    "labelTextColor": "#f9fafb",
+    "loopTextColor": "#f9fafb",
+    "noteBkgColor": "#1f2937",
+    "noteBorderColor": "#f9fafb",
+    "noteTextColor": "#f9fafb",
+    "activationBorderColor": "#f9fafb",
+    "activationBkgColor": "#166534"
+  }
+}}%%
+sequenceDiagram
+    participant U as User
+    participant P as Parser
+    participant E as Executor
+    participant B as B+ Tree Index
+    participant S as Storage
+
+    rect rgb(17, 24, 39)
+        Note over U,S: Indexed path: WHERE id = ? / WHERE id range
+        U->>P: SELECT ... WHERE id ...
+        P->>E: Parsed SELECT query
+        E->>E: Detect id predicate
+        E->>B: Search id / range
+        B-->>E: row offset(s)
+        E->>S: Read row(s) by offset
+        S-->>E: row data
+        E-->>U: Query result
+    end
+
+    rect rgb(31, 41, 55)
+        Note over U,S: Non-indexed path: WHERE major = ? and other fields
+        U->>P: SELECT ... WHERE major ...
+        P->>E: Parsed SELECT query
+        E->>E: Detect non-id predicate
+        E->>S: Scan all rows
+        S-->>E: matched rows
+        E-->>U: Query result
+    end
+```
+
+## 3. ?�심 구현 ?�용
+
+- 발표 ?�간??짧을 경우 ?�론 ?�명 중심?�로 진행
+- ?�간???�을 경우 코드 ?�벨 ?�인?�까지 ?�장 ?�명
+
+### 3-1. INSERT ???�동 ID ?�성 �??�덱???�록
+
+#### ?�론
+
+- `INSERT` ?�행 ???�음 ID ?�동 ?�성
+- ?�성??ID�??�함??row�?바이?�리 ?�맷?�로 ?�??
+- ?�??직후 row ?�작 ?�치??`row offset` ?�보
+- `(id, row offset)`�?B+ Tree??즉시 ?�록
+
+#### 코드 ?�벨 ?�인??
+
+- `execute_statement()`?�서 `INSERT` 문을 `append_insert_row()`�??�결
+- `next_id()`가 ?�동 ID�??�성
+- `binary_writer_append_row()`가 바이?�리 row�?append?�고 `row offset`??반환
+- `index_insert()`가 `(id, row offset)`�??�덱?�에 ?�록
+- ?�제 B+ Tree ?�입?� `bpt_insert_recursive()`가 ?�행
+
+### 3-2. ?�덱??경로?� ?�형 ?�색 경로 분리
+
+#### ?�론
+
+- `WHERE id = ?`??B+ Tree ?�덱???�용
+- `WHERE id >= ?`, `<= ?` ??범위 조건?� leaf ?�회 ?�용
+- `WHERE major = ?` 같�? 조건?� ?�형 ?�색 ?�용
+- 조건 종류???�라 ?�행 경로�?분기
+
+#### 코드 ?�벨 ?�인??
+
+- `execute_statement()`?�서 `SELECT` 문을 `run_select_query()`�??�결
+- `run_select_query()`가 `is_id_equality_predicate()` / `is_id_range_predicate()`�?분기
+- ?�건 ID 조회??`run_select_by_id()` -> `index_find()` -> `bpt_find()` 경로 ?�용
+- 범위 ID 조회??`run_select_by_id_range()` -> `bpt_lower_bound()` 경로 ?�용
+- ?�덱??조회 ?�후 ?�제 row ?�기??`binary_reader_read_row_at()`가 ?�행
+- 비인?�스 조건?� `run_select_linear()` -> `binary_reader_scan_all()` 경로 ?�용
+
+### 3-3. B+ Tree ?�드 구성 방식
+
+#### ?�론
+
+- ?��? ?�드??key?� child pointer 보유
+- 리프 ?�드??key?� value(`row offset`) 보유
+- 리프 ?�드 �??�결???�해 범위 조회 지??
+- ?�드가 가??차면 split ?�행
+- split 결과�?부�??�드??반영
+
+#### 컴포?�트 ?�이?�그??
+
+```mermaid
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "background": "#0b1020",
+    "primaryColor": "#111827",
+    "primaryTextColor": "#f9fafb",
+    "primaryBorderColor": "#f9fafb",
+    "lineColor": "#e5e7eb",
+    "secondaryColor": "#1f2937",
+    "secondaryTextColor": "#f9fafb",
+    "tertiaryColor": "#0f172a",
+    "tertiaryTextColor": "#f9fafb"
+  }
+}}%%
+flowchart TD
+    A["CLI / SQL Input"] --> B["Parser"]
+    B --> C["Executor"]
+    C --> D["Storage Layer"]
+    C --> E["B+ Tree Index"]
+    D --> F["Binary .data File"]
+    E --> G["id -> row offset"]
+
+    classDef box fill:#111827,stroke:#f9fafb,stroke-width:2px,color:#f9fafb;
+    classDef storage fill:#1f2937,stroke:#cbd5e1,stroke-width:2px,color:#f9fafb;
+    classDef index fill:#1e3a8a,stroke:#bfdbfe,stroke-width:2px,color:#eff6ff;
+    class A,B,C box;
+    class D,F storage;
+    class E,G index;
+```
+
+#### B+ Tree 구조 ?�시
+
+```mermaid
+flowchart TD
+    R["Internal Node<br/>keys: 30, 70"]
+    L1["Leaf<br/>1, 10, 20"]
+    L2["Leaf<br/>30, 40, 60"]
+    L3["Leaf<br/>70, 80, 90"]
+
+    R --> L1
+    R --> L2
+    R --> L3
+    L1 --> L2
+    L2 --> L3
+```
+
+#### 코드 ?�벨 ?�인??
+
+- `BptNode` 구조체�? internal / leaf ?�드 ?�태�??�께 ?�의
+- `bpt_insert_recursive()`가 leaf ?�입�?internal ?�입??모두 처리
+- leaf split ???�른�??�드??�?key�?부모로 ?�격
+- internal split ??중간 key�?부모로 ?�격
+- `bpt_find()`가 equality query ?�색???�당
+- `bpt_lower_bound()`가 range query ?�작 leaf�?찾음
+
+## 4. ?�연
+
+### 4-1. CLI 기능 ?�연
+
+?�연 ?�서
+1. `INSERT`�??�코??추�?
+2. `SELECT *`�??�체 ?�이???�인
+3. `WHERE id = ?`�??�건 ?�덱??조회
+4. `WHERE id >= ?` ?�는 `WHERE id <= ?`�?범위 조회
+5. `WHERE major = ?`�?비인?�스 조건 조회
+
+?�시 SQL
+
 ```sql
+INSERT INTO demo.students (name, major, grade) VALUES ("Kim", "CS", "3");
+INSERT INTO demo.students (name, major, grade) VALUES ("Lee", "Math", "2");
+
 SELECT * FROM demo.students;
-SELECT name, grade FROM demo.students WHERE id = 2;
+SELECT name, major FROM demo.students WHERE id = 1;
+SELECT * FROM demo.students WHERE id >= 1;
+SELECT * FROM demo.students WHERE major = "CS";
 ```
 
-파일 실행 모드(기존 방식):
-```bash
-docker run --rm week7-mini-sql examples/db examples/sql/demo_workflow.sql
-```
+### 4-2. CLI ?�외 처리
 
-## 8. 4분 데모 스크립트 + Q&A
-데모(4분):
-- 0:00~0:40: 문제/목표(텍스트->바이너리, 자동ID, B+ 트리 인덱스)
-- 0:40~1:20: 저장 포맷과 B+ 트리 인덱스 설명
-- 1:20~2:20: INSERT + WHERE id + WHERE major 시연
-- 2:20~3:20: 테스트/마이그레이션 검증
-- 3:20~4:00: 벤치 결과 요약
+- 존재?��? ?�는 ID 조회
+- ?�못??조건???�력
+- 지?�하지 ?�는 SQL ?�식 ?�력
 
-Q&A(예상):
-1. 왜 `id`만 인덱스 최적화했나?
-- 과제 핵심 경로를 먼저 확실히 검증하기 위해서입니다.
-2. 인덱스 실패 시 처리?
-- 오류를 반환하고 질의는 실패 처리합니다.
-3. 텍스트 대비 바이너리 장점?
-- 파싱 비용 감소, row_ref 기반 직접 접근, 인덱스 경로 성능 개선.
+### 4-3. 100�?�??�이??기반 ?�능 비교
+
+- ?�이???? `1,000,000`�??�상
+- 비교 A: `WHERE id = ?` -> B+ Tree ?�덱???�용
+- 비교 B: `WHERE major = ?` -> ?�형 ?�색 ?�용
+- ?�덱??경로?� ?�형 ?�색 경로???�행 ?�간 비교
+
+#### 측정 ?�시 결과
+
+| ??�� | ?�행 ?�간 | ?�근 경로 |
+| --- | ---: | --- |
+| `WHERE id = ?` | 540 ms | B+ Tree Index |
+| `WHERE major = ?` | 958 ms | Linear Scan |
+
+#### ?�석 ?�인??
+
+- `WHERE id = ?`??row ?�치�?직접 찾기 ?�문??조회 비용???�음
+- `WHERE major = ?`???�체 row 비교가 ?�요??비용????
+- ?�일??SELECT?�도 조건???�라 ?�행 경로가 ?�라�?
+
+## 5. ?�스??
+
+### 5-1. ?�위 ?�스??
+
+- B+ Tree ?�입 검�?
+- key 검??검�?
+- 범위 검??검�?
+- ?�드 분할 ?�후 검???�확??검�?
+- 존재?��? ?�는 key 조회 검�?
+
+### 5-2. 기능 ?�스??
+
+- `INSERT` ???�동 ID 증�? 검�?
+- `SELECT *` 결과 검�?
+- `WHERE id = ?` ?�작 검�?
+- `WHERE id` 범위 조건 ?�작 검�?
+- `WHERE major = ?` ?�형 ?�색 ?�작 검�?
+
+### 5-3. ?�합 관??검�?
+
+- SQL ?�력부???�싱, ?�행, ?�?? 조회까�? ?�체 ?�름 검�?
+- 바이?�리 ?�??구조 ?�환 ?�후 결과 ?��???검�?
+- ?�덱??경로?� 비인?�스 경로??분기 ?�작 검�?
+
+## 6. ?�감
+
+- 추후 ?�성 ?�정

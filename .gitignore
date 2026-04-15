@@ -15,6 +15,8 @@ examples/output/
 # Tooling files
 compile_commands.json
 .cache/
+.codex
+.codex/
 
 # Editor and IDE files
 .idea/
