@@ -10,7 +10,7 @@
 - `.data` 텍스트 저장 -> 바이너리 저장 전환
 - `INSERT` 시 `id` 자동 부여
 - 자동 부여된 `id -> row_ref(byte offset)`를 B+ 트리에 등록
-- `WHERE id = ?` 인덱스 조회 분기
+- `WHERE id = ?` 및 `WHERE id >, >=, <, <= ?` 인덱스 조회 분기
 - 텍스트 데이터 자동 마이그레이션(일회성)
 - 테스트/벤치/데모 문서 반영
 
@@ -24,6 +24,7 @@
 ## 3. 실행 흐름
 - INSERT: `auto id 생성 -> binary append -> bptree_insert`
 - SELECT (`WHERE id = ?`): `index_find -> row_ref direct read`
+- SELECT (`WHERE id >, >=, <, <= ?`): `B+ 트리 리프 순회 -> row_ref direct read`
 - SELECT (그 외): 바이너리 파일 선형 스캔
 
 ## 3-1. B+ 트리 인덱스
@@ -48,6 +49,7 @@
 - 파서 INSERT/SELECT-WHERE 파싱
 - `index_init/index_insert/index_find`
 - 자동 ID 증가와 `WHERE id` 조회
+- `WHERE id >= ?`, `WHERE id <= ?` 범위 조회
 - 일반 조건 선형 스캔(`WHERE major = ?`)
 - 없는 id 조회 빈 결과
 - 텍스트->바이너리 마이그레이션 후 조회 일치

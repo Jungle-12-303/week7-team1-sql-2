@@ -90,6 +90,59 @@ static int bpt_find(BptNode *root, uint64_t id, RowRef *out_ref) {
     return 1;
 }
 
+static BptNode *bpt_leftmost_leaf(BptNode *root) {
+    BptNode *node = root;
+    if (node == NULL) {
+        return NULL;
+    }
+
+    while (!node->is_leaf) {
+        node = node->as.internal.children[0];
+        if (node == NULL) {
+            return NULL;
+        }
+    }
+    return node;
+}
+
+static bool bpt_lower_bound(BptNode *root, uint64_t key, BptNode **out_leaf, size_t *out_index) {
+    BptNode *node = root;
+    size_t i;
+
+    if (node == NULL) {
+        return false;
+    }
+
+    while (!node->is_leaf) {
+        i = 0;
+        while (i < node->size && key >= node->keys[i]) {
+            i++;
+        }
+        node = node->as.internal.children[i];
+        if (node == NULL) {
+            return false;
+        }
+    }
+
+    i = 0;
+    while (i < node->size && node->keys[i] < key) {
+        i++;
+    }
+
+    if (i >= node->size) {
+        node = node->as.leaf.next;
+        i = 0;
+    }
+
+    if (node == NULL) {
+        return false;
+    }
+
+    *out_leaf = node;
+    *out_index = i;
+    return true;
+}
+
 static int bpt_insert_recursive(BptNode *node, uint64_t id, RowRef ref, BptSplitResult *out_split) {
     size_t i;
 
@@ -300,6 +353,10 @@ int index_find(uint64_t id, RowRef *out_ref) {
     return bpt_find(g_index_root, id, out_ref);
 }
 
+bool index_is_ready(void) {
+    return g_index_ready && g_index_root != NULL;
+}
+
 uint64_t next_id(void) {
     g_next_id_counter++;
     return g_next_id_counter;
@@ -321,6 +378,42 @@ static bool parse_u64_strict(const char *text, uint64_t *out_value) {
 
     *out_value = (uint64_t) parsed;
     return true;
+}
+
+static bool compare_with_operator_int(int cmp, WhereOperator op) {
+    if (op == WHERE_OP_EQUAL) {
+        return cmp == 0;
+    }
+    if (op == WHERE_OP_GREATER) {
+        return cmp > 0;
+    }
+    if (op == WHERE_OP_GREATER_EQUAL) {
+        return cmp >= 0;
+    }
+    if (op == WHERE_OP_LESS) {
+        return cmp < 0;
+    }
+    if (op == WHERE_OP_LESS_EQUAL) {
+        return cmp <= 0;
+    }
+    return false;
+}
+
+static bool where_value_matches(const char *lhs, const char *rhs, WhereOperator op) {
+    uint64_t left_u64 = 0;
+    uint64_t right_u64 = 0;
+
+    if (parse_u64_strict(lhs, &left_u64) && parse_u64_strict(rhs, &right_u64)) {
+        if (left_u64 < right_u64) {
+            return compare_with_operator_int(-1, op);
+        }
+        if (left_u64 > right_u64) {
+            return compare_with_operator_int(1, op);
+        }
+        return compare_with_operator_int(0, op);
+    }
+
+    return compare_with_operator_int(strcmp(lhs, rhs), op);
 }
 
 static int find_column_index(const StringList *columns, const char *name) {
@@ -1105,13 +1198,53 @@ bool is_id_equality_predicate(const SelectStatement *statement, uint64_t *out_id
         return false;
     }
 
+    if (statement->where.op != WHERE_OP_EQUAL) {
+        return false;
+    }
+
     return parse_u64_strict(statement->where.value, out_id);
+}
+
+bool is_id_range_predicate(const SelectStatement *statement, WhereOperator *out_op, uint64_t *out_id) {
+    if (!statement->where.enabled) {
+        return false;
+    }
+    if (statement->where.column == NULL || sql_stricmp(statement->where.column, "id") != 0) {
+        return false;
+    }
+    if (statement->where.op == WHERE_OP_EQUAL) {
+        return false;
+    }
+    if (!parse_u64_strict(statement->where.value, out_id)) {
+        return false;
+    }
+    *out_op = statement->where.op;
+    return true;
+}
+
+static int append_row_by_ref(RowRef ref, QueryResult *out) {
+    StringList row_values;
+    char error[SQL_ERROR_SIZE];
+
+    memset(&row_values, 0, sizeof(row_values));
+    if (binary_reader_read_row_at(ref, &row_values) != 0) {
+        return -1;
+    }
+    if (row_values.count != g_active_table->columns.count) {
+        string_list_free(&row_values);
+        return -1;
+    }
+    memset(error, 0, sizeof(error));
+    if (!query_result_append_row(out, &row_values, error, sizeof(error))) {
+        string_list_free(&row_values);
+        return -1;
+    }
+    string_list_free(&row_values);
+    return 0;
 }
 
 int run_select_by_id(uint64_t id, QueryResult *out) {
     RowRef ref;
-    StringList row_values;
-    char error[SQL_ERROR_SIZE];
 
     if (g_active_table == NULL) {
         return -1;
@@ -1121,23 +1254,59 @@ int run_select_by_id(uint64_t id, QueryResult *out) {
         return 0;
     }
 
-    memset(&row_values, 0, sizeof(row_values));
-    if (binary_reader_read_row_at(ref, &row_values) != 0) {
+    return append_row_by_ref(ref, out);
+}
+
+int run_select_by_id_range(WhereOperator op, uint64_t id, QueryResult *out) {
+    BptNode *leaf = NULL;
+    size_t index = 0;
+
+    if (g_active_table == NULL || !g_index_ready || g_index_root == NULL) {
         return -1;
     }
 
-    if (row_values.count != g_active_table->columns.count) {
-        string_list_free(&row_values);
-        return -1;
+    if (op == WHERE_OP_GREATER || op == WHERE_OP_GREATER_EQUAL) {
+        if (!bpt_lower_bound(g_index_root, id, &leaf, &index)) {
+            return 0;
+        }
+
+        while (leaf != NULL) {
+            while (index < leaf->size) {
+                uint64_t key = leaf->keys[index];
+                if (op == WHERE_OP_GREATER && key <= id) {
+                    index++;
+                    continue;
+                }
+                if (append_row_by_ref(leaf->as.leaf.refs[index], out) != 0) {
+                    return -1;
+                }
+                index++;
+            }
+            leaf = leaf->as.leaf.next;
+            index = 0;
+        }
+        return 0;
     }
 
-    memset(error, 0, sizeof(error));
-    if (!query_result_append_row(out, &row_values, error, sizeof(error))) {
-        string_list_free(&row_values);
-        return -1;
+    leaf = bpt_leftmost_leaf(g_index_root);
+    while (leaf != NULL) {
+        for (index = 0; index < leaf->size; ++index) {
+            uint64_t key = leaf->keys[index];
+
+            if (op == WHERE_OP_LESS && key >= id) {
+                return 0;
+            }
+            if (op == WHERE_OP_LESS_EQUAL && key > id) {
+                return 0;
+            }
+
+            if (append_row_by_ref(leaf->as.leaf.refs[index], out) != 0) {
+                return -1;
+            }
+        }
+        leaf = leaf->as.leaf.next;
     }
 
-    string_list_free(&row_values);
     return 0;
 }
 
@@ -1162,7 +1331,7 @@ static int linear_scan_callback(RowRef ref, const StringList *values, void *ctx)
             return -1;
         }
 
-        if (strcmp(values->items[where_index], context->statement->where.value) != 0) {
+        if (!where_value_matches(values->items[where_index], context->statement->where.value, context->statement->where.op)) {
             return 0;
         }
     }
@@ -1410,11 +1579,19 @@ bool run_select_query(
 
     {
         uint64_t id_value = 0;
+        WhereOperator id_op = WHERE_OP_EQUAL;
         if (is_id_equality_predicate(statement, &id_value)) {
             if (run_select_by_id(id_value, &full_result) != 0) {
                 free_query_result(&full_result);
                 free_table_definition(&table);
                 snprintf(error, error_size, "failed to run id index path");
+                return false;
+            }
+        } else if (is_id_range_predicate(statement, &id_op, &id_value)) {
+            if (run_select_by_id_range(id_op, id_value, &full_result) != 0) {
+                free_query_result(&full_result);
+                free_table_definition(&table);
+                snprintf(error, error_size, "failed to run id range index path");
                 return false;
             }
         } else {

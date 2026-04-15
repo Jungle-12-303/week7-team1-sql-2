@@ -44,6 +44,7 @@ status: done
 - `tasks/T05.md`: 테스트/벤치마크 구현
 - `tasks/T06.md`: README/데모 업데이트
 - `tasks/T07.md`: 텍스트 데이터 -> 바이너리 데이터 마이그레이션 검증
+- `tasks/T08.md`: WHERE id 범위 조회(`>`, `>=`, `<`, `<=`) 지원
 
 ## 자동 실행 규칙
 - 규칙 1: `depends_on`이 완료된 문서/카드만 실행한다.

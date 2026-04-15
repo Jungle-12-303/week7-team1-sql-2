@@ -20,6 +20,10 @@ typedef enum {
     TOKEN_SEMICOLON,
     TOKEN_STAR,
     TOKEN_EQUAL,
+    TOKEN_GREATER,
+    TOKEN_GREATER_EQUAL,
+    TOKEN_LESS,
+    TOKEN_LESS_EQUAL,
     TOKEN_INSERT,
     TOKEN_INTO,
     TOKEN_VALUES,
@@ -375,6 +379,38 @@ static bool tokenize_sql(
                     return false;
                 }
                 break;
+            case '>':
+                if (source[index + 1] == '=') {
+                    if (!token_list_append(tokens, TOKEN_GREATER_EQUAL, source + index, 2, line, column)) {
+                        snprintf(error, error_size, "out of memory while tokenizing");
+                        free_tokens(tokens);
+                        return false;
+                    }
+                    index += 2;
+                    column += 2;
+                    continue;
+                }
+                if (!append_simple_token(tokens, TOKEN_GREATER, ch, line, column, error, error_size)) {
+                    free_tokens(tokens);
+                    return false;
+                }
+                break;
+            case '<':
+                if (source[index + 1] == '=') {
+                    if (!token_list_append(tokens, TOKEN_LESS_EQUAL, source + index, 2, line, column)) {
+                        snprintf(error, error_size, "out of memory while tokenizing");
+                        free_tokens(tokens);
+                        return false;
+                    }
+                    index += 2;
+                    column += 2;
+                    continue;
+                }
+                if (!append_simple_token(tokens, TOKEN_LESS, ch, line, column, error, error_size)) {
+                    free_tokens(tokens);
+                    return false;
+                }
+                break;
             default:
                 snprintf(error, error_size, "unexpected character '%c' at line %d, column %d", ch, line, column);
                 free_tokens(tokens);
@@ -665,7 +701,7 @@ static bool parse_select(Parser *parser, Statement *statement, char *error, size
         return false;
     }
 
-    /* WHERE가 있으면 컬럼 = 값 형태만 지원하므로 그 구조를 그대로 검증한다. */
+    /* WHERE는 column [=,>,>=,<,<=] value 형태를 지원한다. */
     if (match(parser, TOKEN_WHERE)) {
         Token *column = peek(parser);
         Token *value;
@@ -681,10 +717,21 @@ static bool parse_select(Parser *parser, Statement *statement, char *error, size
         select_statement.where.enabled = true;
         parser->current++;
 
-        if (!consume(parser, TOKEN_EQUAL, "expected '=' inside WHERE clause", error, error_size)) {
+        if (match(parser, TOKEN_EQUAL)) {
+            select_statement.where.op = WHERE_OP_EQUAL;
+        } else if (match(parser, TOKEN_GREATER_EQUAL)) {
+            select_statement.where.op = WHERE_OP_GREATER_EQUAL;
+        } else if (match(parser, TOKEN_GREATER)) {
+            select_statement.where.op = WHERE_OP_GREATER;
+        } else if (match(parser, TOKEN_LESS_EQUAL)) {
+            select_statement.where.op = WHERE_OP_LESS_EQUAL;
+        } else if (match(parser, TOKEN_LESS)) {
+            select_statement.where.op = WHERE_OP_LESS;
+        } else {
             string_list_free(&select_statement.columns);
             free_qualified_name(&select_statement.source);
             free(select_statement.where.column);
+            snprintf(error, error_size, "expected comparison operator (=, >, >=, <, <=) in WHERE clause");
             return false;
         }
 

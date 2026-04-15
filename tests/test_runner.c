@@ -80,6 +80,22 @@ static void test_parse_select_where(void) {
     ASSERT_TRUE(script.items[0].as.select.where.enabled, "WHERE clause should be enabled");
     ASSERT_STRING("id", script.items[0].as.select.where.column, "WHERE column mismatch");
     ASSERT_STRING("1", script.items[0].as.select.where.value, "WHERE value mismatch");
+    ASSERT_TRUE(script.items[0].as.select.where.op == WHERE_OP_EQUAL, "WHERE op should be '='");
+    free_script(&script);
+}
+
+static void test_parse_select_where_range(void) {
+    SQLScript script;
+    char error[SQL_ERROR_SIZE];
+    const char *sql = "SELECT id FROM demo.students WHERE id >= 2;";
+
+    memset(&script, 0, sizeof(script));
+
+    ASSERT_TRUE(parse_sql_script(sql, &script, error, sizeof(error)), error);
+    ASSERT_TRUE(script.count == 1, "expected one parsed statement");
+    ASSERT_TRUE(script.items[0].type == STATEMENT_SELECT, "expected SELECT statement");
+    ASSERT_TRUE(script.items[0].as.select.where.enabled, "WHERE clause should be enabled");
+    ASSERT_TRUE(script.items[0].as.select.where.op == WHERE_OP_GREATER_EQUAL, "WHERE op should be '>='");
     free_script(&script);
 }
 
@@ -190,6 +206,51 @@ static void test_where_id_not_found(void) {
     free_query_result(&result);
 }
 
+static void test_where_id_range(void) {
+    const char *root = "tests/tmp/unit_db";
+    char error[SQL_ERROR_SIZE];
+    SelectStatement gt_stmt;
+    SelectStatement le_stmt;
+    QueryResult result;
+
+    memset(&gt_stmt, 0, sizeof(gt_stmt));
+    gt_stmt.source.schema = sql_strdup("demo");
+    gt_stmt.source.table = sql_strdup("students");
+    gt_stmt.select_all = true;
+    gt_stmt.where.enabled = true;
+    gt_stmt.where.column = sql_strdup("id");
+    gt_stmt.where.value = sql_strdup("1");
+    gt_stmt.where.op = WHERE_OP_GREATER;
+
+    memset(&result, 0, sizeof(result));
+    ASSERT_TRUE(run_select_query(root, &gt_stmt, &result, error, sizeof(error)), error);
+    ASSERT_TRUE(result.row_count == 1, "WHERE id > 1 should return one row");
+    ASSERT_STRING("2", result.rows[0].values.items[0], "range query should return id=2");
+    free_query_result(&result);
+
+    memset(&le_stmt, 0, sizeof(le_stmt));
+    le_stmt.source.schema = sql_strdup("demo");
+    le_stmt.source.table = sql_strdup("students");
+    le_stmt.select_all = true;
+    le_stmt.where.enabled = true;
+    le_stmt.where.column = sql_strdup("id");
+    le_stmt.where.value = sql_strdup("1");
+    le_stmt.where.op = WHERE_OP_LESS_EQUAL;
+
+    memset(&result, 0, sizeof(result));
+    ASSERT_TRUE(run_select_query(root, &le_stmt, &result, error, sizeof(error)), error);
+    ASSERT_TRUE(result.row_count == 1, "WHERE id <= 1 should return one row");
+    ASSERT_STRING("1", result.rows[0].values.items[0], "range query should return id=1");
+
+    free_qualified_name(&gt_stmt.source);
+    free(gt_stmt.where.column);
+    free(gt_stmt.where.value);
+    free_qualified_name(&le_stmt.source);
+    free(le_stmt.where.column);
+    free(le_stmt.where.value);
+    free_query_result(&result);
+}
+
 static void test_text_to_binary_migration(void) {
     const char *root = "tests/tmp/migration_db";
     char error[SQL_ERROR_SIZE];
@@ -225,10 +286,12 @@ static void test_text_to_binary_migration(void) {
 int main(void) {
     test_parse_insert();
     test_parse_select_where();
+    test_parse_select_where_range();
     test_index_insert_find();
     test_auto_id_and_where_id();
     test_where_name_linear();
     test_where_id_not_found();
+    test_where_id_range();
     test_text_to_binary_migration();
 
     if (failures > 0) {

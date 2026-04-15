@@ -8,10 +8,19 @@ typedef struct {
     char *table;
 } QualifiedName;
 
+typedef enum {
+    WHERE_OP_EQUAL = 0,
+    WHERE_OP_GREATER,
+    WHERE_OP_GREATER_EQUAL,
+    WHERE_OP_LESS,
+    WHERE_OP_LESS_EQUAL
+} WhereOperator;
+
 typedef struct {
     bool enabled;
     char *column;
     char *value;
+    WhereOperator op;
 } WhereClause;
 
 typedef struct {

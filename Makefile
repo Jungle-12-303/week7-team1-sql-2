@@ -9,7 +9,6 @@ TEST_TARGET := $(BUILD_DIR)/test_runner
 COMMON_SOURCES := \
 	src/common.c \
 	src/parser.c \
-	src/bptree.c \
 	src/storage.c \
 	src/executor.c
 

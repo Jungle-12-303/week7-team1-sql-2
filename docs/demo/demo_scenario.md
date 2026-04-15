@@ -31,15 +31,33 @@ docker run --rm week7-mini-sql
 ```
 
 ### 화면에서 기대할 결과
-- `INSERT 1` 출력이 2번 나타난다.
+- `INSERT 1` 출력이 5번 나타난다.
 - `SELECT *` 결과 테이블에 기존 데이터 + 신규 데이터가 함께 보인다.
 - `WHERE id = 2` 조건 결과가 1건으로 출력된다.
+- `WHERE id >= 4` 조건 결과가 다건으로 출력된다.
 
 ### 발표 멘트
 - "INSERT 시 id를 입력하지 않아도 자동으로 부여됩니다."
 - "id 조건은 인덱스 경로로, 일반 조건은 선형 스캔 경로로 분기됩니다."
 
-## 3단계: 마이그레이션 증거 확인
+## 3단계: CLI 범위 조회 시연
+### 명령어
+```bash
+docker run --rm --entrypoint /bin/bash week7-mini-sql -lc \
+"cp -r /app/examples /tmp/demo && \
+ /app/build/mini_sql /tmp/demo/db /tmp/demo/sql/demo_range_workflow.sql"
+```
+
+### 화면에서 기대할 결과
+- `WHERE id >= 4` 결과가 연속 id 구간으로 출력된다.
+- `WHERE id <= 5` 결과가 낮은 id 구간으로 출력된다.
+- `WHERE id > 6`, `WHERE id < 8` 결과가 각각 기대 범위만 출력된다.
+
+### 발표 멘트
+- "B+ 트리 인덱스를 point 조회뿐 아니라 range 조회에도 적용했습니다."
+- "CLI에서 `>=`, `<=`, `>`, `<` 조건을 바로 실행해 범위 필터링을 검증할 수 있습니다."
+
+## 4단계: 마이그레이션 증거 확인
 ### 명령어
 ```bash
 docker run --rm --entrypoint /bin/bash week7-mini-sql -lc \
@@ -59,7 +77,7 @@ docker run --rm --entrypoint /bin/bash week7-mini-sql -lc \
 - "초기 텍스트 데이터는 백업(`.text.bak`)으로 보존하고, 활성 데이터 파일은 바이너리로 전환합니다."
 - "이 방식으로 기존 데이터 손실 위험을 줄이면서 저장 포맷을 바꿉니다."
 
-## 4단계: 100만 건 벤치마크 시연 (Docker/PowerShell)
+## 5단계: 100만 건 벤치마크 시연 (Docker/PowerShell)
 ### 명령어
 ```powershell
 .\scripts\bench_docker.ps1

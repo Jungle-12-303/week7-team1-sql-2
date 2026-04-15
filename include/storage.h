@@ -62,7 +62,9 @@ int binary_reader_read_row_at(RowRef ref, StringList *out_values);
 int binary_reader_scan_all(RowCallback cb, void *ctx);
 int migrate_text_data_to_binary(const char *text_path, const char *bin_path);
 bool is_id_equality_predicate(const SelectStatement *statement, uint64_t *out_id);
+bool is_id_range_predicate(const SelectStatement *statement, WhereOperator *out_op, uint64_t *out_id);
 int run_select_by_id(uint64_t id, QueryResult *out);
+int run_select_by_id_range(WhereOperator op, uint64_t id, QueryResult *out);
 int run_select_linear(const SelectStatement *statement, QueryResult *out);
 
 /* 결과 메모리 해제 */
