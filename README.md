@@ -1,6 +1,6 @@
 ﻿# B+ Tree Index Mini SQL
 
-- 기존 바이너리 데이터 구조의 Mini SQL 처리기
+- 기존 "바이너리 데이터 구조"의 Mini SQL 처리기
 - B+ Tree를 적용해 조회 속도 향상
 
 ## 1. 서비스
