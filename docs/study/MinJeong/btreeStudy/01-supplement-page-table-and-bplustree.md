@@ -109,6 +109,199 @@ B+ Tree internal node = index page
 B+ Tree leaf node     = leaf page
 ```
 
+아래 그림은 사용자의 조회 요청이 들어왔을 때, 필요한 page가 이미 RAM/page cache에 있는 경우와 디스크에서 읽어와야 하는 경우를 나누어 단순화한 것입니다.
+
+![DB page와 B+ Tree가 RAM으로 올라오는 흐름](image/01-supplement-db-page-bplustree-ram.svg)
+
+### 4-1. 큰 데이터베이스를 page와 B+ Tree로 관리하는 예시
+
+학생 데이터가 1,000만 건 들어 있는 아주 큰 데이터베이스를 상상해보겠습니다.
+
+```text
+students table
+row 수 = 10,000,000
+```
+
+이 데이터를 row 하나씩 따로 디스크에서 읽으면 너무 비효율적입니다.
+그래서 DB는 여러 row를 page 하나에 묶어 저장합니다.
+
+예를 들어 data page 하나에 row 100개가 들어간다고 가정하면:
+
+```text
+data page 0      = id 1 ~ 100 row 저장
+data page 1      = id 101 ~ 200 row 저장
+data page 2      = id 201 ~ 300 row 저장
+...
+data page 99999  = id 9,999,901 ~ 10,000,000 row 저장
+```
+
+이제 `id = 7,500,000`인 학생을 찾는다고 해보겠습니다.
+인덱스가 없다면 DB는 data page를 처음부터 읽어야 할 수 있습니다.
+
+```text
+data page 0 확인
+data page 1 확인
+data page 2 확인
+...
+id 7,500,000이 있는 page를 찾을 때까지 반복
+```
+
+이 방식은 데이터가 많아질수록 느려집니다.
+
+그래서 DB는 `id`에 대한 B+ Tree 인덱스를 둡니다.
+B+ Tree 인덱스도 page 단위로 저장된다고 생각할 수 있습니다.
+
+```text
+root index page
+-> internal index page
+-> leaf index page
+-> data page 위치
+```
+
+예를 들어 index page들이 아래처럼 구성되어 있다고 가정할 수 있습니다.
+
+```text
+root index page:
+[3,000,000 | 6,000,000 | 9,000,000]
+
+internal index page:
+[7,000,000 | 7,500,000 | 8,000,000]
+
+leaf index page:
+7,500,000 -> data page 74999 안의 특정 row 위치
+```
+
+조회 흐름은 아래처럼 됩니다.
+
+```text
+SELECT * FROM students WHERE id = 7,500,000;
+
+1. root index page 읽기
+   -> 7,500,000은 6,000,000 이상 9,000,000 미만 범위
+
+2. 해당 internal index page 읽기
+   -> 7,500,000이 들어갈 더 좁은 범위 확인
+
+3. leaf index page 읽기
+   -> 7,500,000의 실제 data page 위치 확인
+
+4. data page 74999 읽기
+   -> 그 page 안에서 row 하나 찾기
+```
+
+즉 B+ Tree 인덱스는 전체 data page를 다 읽지 않고, 필요한 index page 몇 개와 실제 data page 하나 정도로 접근 범위를 줄여줍니다.
+
+```text
+인덱스 없음:
+많은 data page를 순서대로 확인할 수 있음
+
+B+ Tree 인덱스 있음:
+root page -> internal page -> leaf page -> data page
+```
+
+이것이 DB에서 B+ Tree와 page가 함께 등장하는 이유입니다.
+B+ Tree는 "row 하나를 바로 들고 오는 구조"라기보다, **어떤 page를 읽어야 원하는 row에 도달할 수 있는지 알려주는 지도**에 가깝습니다.
+
+### 4-2. 디스크의 page가 RAM으로 올라오는 흐름
+
+큰 데이터베이스의 page는 처음부터 전부 RAM에 올라와 있지 않습니다.
+데이터가 너무 크기 때문에 필요한 page만 메모리에 올려서 사용합니다.
+
+```text
+디스크:
+DB 파일 전체가 저장되어 있음
+
+RAM:
+지금 사용 중이거나 최근에 사용한 page 일부만 올라와 있음
+```
+
+예를 들어 `id = 7,500,000`을 찾기 위해 아래 page들이 필요하다고 해보겠습니다.
+
+```text
+root index page
+internal index page
+leaf index page
+data page 74999
+```
+
+이 page들이 이미 RAM에 있으면 DB는 빠르게 읽을 수 있습니다.
+하지만 RAM에 없다면 디스크에서 읽어와야 합니다.
+
+흐름은 대략 아래처럼 볼 수 있습니다.
+
+```text
+1. DB가 root index page를 읽으려고 함
+2. 해당 page가 RAM에 있는지 확인
+3. RAM에 있으면 바로 사용
+4. RAM에 없으면 디스크에서 page를 읽어 RAM에 올림
+5. RAM에 올라온 page 안의 key를 확인
+6. 다음으로 읽어야 할 page를 결정
+```
+
+즉 DB는 논리적으로는 B+ Tree를 따라가지만, 실제 실행에서는 필요한 page를 RAM에 올리는 일이 함께 일어납니다.
+
+```text
+B+ Tree 관점:
+root page -> internal page -> leaf page -> data page
+
+메모리 관점:
+필요한 page가 RAM에 있으면 바로 읽고,
+없으면 디스크에서 RAM으로 가져온 뒤 읽는다.
+```
+
+여기서 운영체제의 page cache가 관여할 수 있습니다.
+DB 파일의 어떤 부분을 한 번 읽으면, 운영체제는 그 내용을 RAM에 cache해둘 수 있습니다.
+그러면 같은 page를 다시 읽을 때 디스크까지 가지 않고 RAM에서 읽을 수 있습니다.
+
+```text
+첫 번째 조회:
+디스크에서 page 읽기
+-> RAM/page cache에 올라옴
+
+두 번째 조회:
+같은 page가 필요함
+-> RAM/page cache에서 바로 읽을 수 있음
+```
+
+이 때문에 같은 B+ Tree 조회라도, 필요한 page가 이미 RAM에 있는지에 따라 속도가 달라질 수 있습니다.
+
+### 4-3. page fault와 DB page 읽기의 관계
+
+운영체제는 메모리를 OS page 단위로 관리합니다.
+프로그램이 어떤 메모리 주소에 접근했는데, 그 주소에 해당하는 OS page가 아직 RAM에 없으면 page fault가 발생할 수 있습니다.
+
+DB가 파일을 읽는 과정에서도 비슷한 일이 간접적으로 연결될 수 있습니다.
+
+```text
+DB가 index page를 읽으려고 함
+-> 해당 파일 내용이 RAM/page cache에 없음
+-> 운영체제가 디스크에서 필요한 부분을 읽어 RAM에 올림
+-> DB는 RAM에 올라온 내용을 읽음
+```
+
+이때 운영체제 수준에서는 page fault나 디스크 read가 발생할 수 있습니다.
+다만 DB 문서에서 말하는 `DB page`와 운영체제가 말하는 `OS page`는 완전히 같은 단위는 아닐 수 있습니다.
+
+```text
+DB page:
+DB가 파일을 관리하기 위해 정한 논리적 단위
+예: index page, data page
+
+OS page:
+운영체제가 메모리를 관리하기 위해 정한 단위
+예: 가상 메모리 page
+```
+
+두 page의 크기는 같을 수도 있고 다를 수도 있습니다.
+중요한 것은, DB가 어떤 page를 읽으려고 할 때 그 내용이 RAM에 없으면 디스크에서 가져오는 비용이 생긴다는 점입니다.
+
+그래서 실제 DB 성능에서는 아래 두 가지가 모두 중요합니다.
+
+```text
+1. B+ Tree가 몇 단계 만에 필요한 page를 찾는가
+2. 그 page들이 RAM에 있는가, 아니면 디스크에서 읽어와야 하는가
+```
+
 ## 5. B+ Tree와 page가 연결되는 이유
 
 B+ Tree는 한 node에 여러 key를 저장합니다.
