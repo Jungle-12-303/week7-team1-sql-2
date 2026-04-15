@@ -761,7 +761,7 @@ VALUES ("Kim", "CS", "3");
   "theme": "base",
   "themeVariables": {
     "background": "#ffffff",
-    "primaryColor": "#ffffff",
+    "primaryColor": "#a06d6d",
     "primaryTextColor": "#111111",
     "primaryBorderColor": "#111111",
     "lineColor": "#111111",
