@@ -19,8 +19,7 @@ done_when:
   - "각 단계에 입력/작업/산출/검증 항목이 있다."
   - "병렬 가능한 작업이 명시돼 있다."
 owner: agent:auto-implementer
-status: todo
-
+status: done
 # 03-implementation-steps
 
 ## 단계 1: 저장 계층 전환 준비

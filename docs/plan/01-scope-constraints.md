@@ -18,8 +18,7 @@ done_when:
   - "비범위 항목이 최소 3개 이상 정의돼 있다."
   - "수용 기준이 테스트 가능 문장으로 작성돼 있다."
 owner: agent:auto-implementer
-status: todo
-
+status: done
 # 01-scope-constraints
 
 ## 필수 범위(In Scope)

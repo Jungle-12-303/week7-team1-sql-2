@@ -19,8 +19,7 @@ done_when:
   - "4분 데모 순서가 시간 단위로 정리돼 있다."
   - "예상 질문 3개 이상과 답변 포인트가 있다."
 owner: agent:auto-implementer
-status: todo
-
+status: done
 # 05-readme-demo
 
 ## README 반영 체크리스트

@@ -18,8 +18,7 @@ done_when:
   - "각 문서의 depends_on이 유효하고 순환 의존이 없다."
   - "각 문서의 done_when 항목이 참/거짓으로 판정 가능하다."
 owner: agent:auto-implementer
-status: todo
-
+status: done
 # 00-index
 
 ## 문서 읽기 순서

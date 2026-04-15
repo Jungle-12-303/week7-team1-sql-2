@@ -20,8 +20,7 @@ done_when:
   - "100만 건 기준 성능 비교 결과(시간/반복수)가 문서화된다."
   - "텍스트 대비 바이너리 개선율이 기록된다."
 owner: agent:auto-implementer
-status: todo
-
+status: done
 # 04-test-benchmark
 
 ## 단위 테스트

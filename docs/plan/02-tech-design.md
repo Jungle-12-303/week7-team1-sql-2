@@ -20,8 +20,7 @@ done_when:
   - "바이너리 포맷과 row_ref 규칙이 정의돼 있다."
   - "오류 상황과 fallback 규칙이 정의돼 있다."
 owner: agent:auto-implementer
-status: todo
-
+status: done
 # 02-tech-design
 
 ## 핵심 데이터 흐름
