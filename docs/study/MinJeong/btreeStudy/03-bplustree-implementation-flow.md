@@ -278,6 +278,30 @@ root split 후:
  기존 root          split.right
 ```
 
+### 6-2. `index_find`와 `index_insert`의 차이
+
+`index_find`와 `index_insert`는 둘 다 root에서 시작해 leaf까지 내려간다는 점은 같습니다.
+하지만 목적과 처리해야 하는 일이 다릅니다.
+
+| 구분 | `index_find` | `index_insert` |
+| --- | --- | --- |
+| 쓰이는 상황 | `SELECT ... WHERE id = ?` | `INSERT`, 기존 데이터 인덱스 재구성 |
+| 목적 | id로 기존 row 위치를 찾는다 | 새 `id -> row_ref` 매핑을 추가한다 |
+| leaf 도착 후 | key를 찾고 `row_ref`를 반환한다 | 정렬 위치에 key/ref를 넣는다 |
+| tree 구조 변경 | 하지 않는다 | node가 가득 차면 split으로 구조가 바뀔 수 있다 |
+| root 변경 가능성 | 없음 | root split 시 새 root를 만들 수 있음 |
+| 반환 의미 | 찾음/없음/오류 | 성공/중복 id/오류 |
+
+즉 `index_find`는 **찾기만 하는 함수**이고, `index_insert`는 **찾아서 넣고 필요하면 트리 구조까지 조정하는 함수**입니다.
+
+```text
+index_find:
+root -> leaf -> id 찾기 -> row_ref 반환
+
+index_insert:
+root -> leaf -> id 삽입 -> 필요하면 leaf/internal/root split
+```
+
 ## 7. leaf 노드 삽입 흐름
 
 `bpt_insert_recursive`가 leaf 노드를 만났을 때의 흐름입니다.
@@ -343,70 +367,78 @@ child가 split되면 그 split 결과를 현재 internal 노드에 반영해야 
 
 ![k=4 internal split cascade](image/03-internal-split-cascade-k4.svg)
 
-상황을 단순화하면 다음과 같습니다.
+아래 예시는 실제로 가능한 트리 모양을 기준으로 잡았습니다.
+`75`를 삽입하기 전, root와 `75`가 내려갈 internal node인 `C1`, 그리고 실제 삽입 대상 leaf가 모두 가득 차 있다고 가정합니다.
 
 ```text
 root:
 [50 | 100 | 150 | 200]
 
-id=75가 들어갈 대상 internal:
+root children:
+C0, C1, C2, C3, C4
+
+id=75가 내려갈 대상 internal C1:
 [60 | 70 | 80 | 90]
 
-id=75가 실제로 들어갈 leaf:
-[71 | 72 | 73 | 74]
+C1 children:
+L10, L11, L12, L13, L14
+
+id=75가 실제로 들어갈 leaf L12:
+[70 | 71 | 72 | 74]
 ```
 
-여기서 root도 key가 4개라 가득 찼고, 대상 internal node도 key가 4개라 가득 찼고, leaf도 가득 찬 상태라고 가정합니다.
+`75`는 root에서 `50 이상 100 미만` 범위이므로 `C1`로 내려갑니다.
+그리고 `C1` 안에서는 `70 이상 80 미만` 범위이므로 `L12`로 내려갑니다.
 
 먼저 `75`는 leaf에 들어가야 합니다.
 하지만 leaf가 가득 차 있으므로 임시로 병합하면 아래처럼 됩니다.
 
 ```text
-[71 | 72 | 73 | 74 | 75]
+[70 | 71 | 72 | 74 | 75]
 ```
 
 이 leaf를 둘로 나누면 다음과 같습니다.
 
 ```text
-left leaf  = [71 | 72]
-right leaf = [73 | 74 | 75]
+left leaf  = [70 | 71]
+right leaf = [72 | 74 | 75]
 ```
 
 B+ Tree의 leaf split에서는 오른쪽 leaf의 첫 key가 부모에게 전달됩니다.
 
 ```text
-promoted_key = 73
+promoted_key = 72
 ```
 
-부모 internal node는 이 `73`을 받아야 합니다.
-하지만 부모 internal도 이미 가득 차 있었습니다.
+부모 internal node `C1`은 이 `72`를 받아야 합니다.
+하지만 `C1`도 이미 가득 차 있었습니다.
 
 ```text
-기존 internal:
+기존 C1:
 [60 | 70 | 80 | 90]
 
-73을 받은 뒤의 임시 상태:
-[60 | 70 | 73 | 80 | 90]
+72를 받은 뒤의 임시 상태:
+[60 | 70 | 72 | 80 | 90]
 ```
 
 `k=4`인데 key가 5개가 되었으므로 internal node도 split됩니다.
-중앙 key인 `73`은 위 부모, 즉 root로 올라갑니다.
+중앙 key인 `72`는 위 부모, 즉 root로 올라갑니다.
 
 ```text
 left internal  = [60 | 70]
-promoted_key   = 73
+promoted_key   = 72
 right internal = [80 | 90]
 ```
 
-이제 root가 `73`을 받아야 합니다.
+이제 root가 `72`를 받아야 합니다.
 그런데 root도 이미 가득 차 있었습니다.
 
 ```text
 기존 root:
 [50 | 100 | 150 | 200]
 
-73을 받은 뒤의 임시 상태:
-[50 | 73 | 100 | 150 | 200]
+72를 받은 뒤의 임시 상태:
+[50 | 72 | 100 | 150 | 200]
 ```
 
 root도 key가 5개가 되었으므로 다시 split됩니다.
@@ -415,7 +447,7 @@ root도 key가 5개가 되었으므로 다시 split됩니다.
 
 여기서 `C0`, `C2`, `C3`, `C4`는 새로 만들어 넣은 노드가 아닙니다.
 root가 split되기 전부터 이미 가지고 있던 child들을 설명하기 위해 붙인 이름입니다.
-`C1-left`, `C1-right`만 이번 삽입 과정에서 기존 `C1`이 split되면서 생긴 두 child입니다.
+`C1-left`, `C1-right`만 이번 삽입 과정에서 기존 `C1`이 split되면서 생긴 두 internal child입니다.
 
 root가 처음에 key를 4개 가지고 있었다면 child는 5개였습니다.
 
@@ -433,7 +465,7 @@ C0, C1, C2, C3, C4
 
 ```text
 임시 root keys:
-[50 | 73 | 100 | 150 | 200]
+[50 | 72 | 100 | 150 | 200]
 
 임시 root children:
 C0, C1-left, C1-right, C2, C3, C4
@@ -449,7 +481,7 @@ root split 이후에는 아래처럼 됩니다.
 [100]
 
 새 root의 왼쪽 child:
-[50 | 73]
+[50 | 72]
   children = C0, C1-left, C1-right
 
 새 root의 오른쪽 child:
@@ -473,14 +505,14 @@ internal split:
 
 여기서 주의할 점은 `[150 | 200]` 아래가 비어 있는 것이 아니라는 점입니다.
 `[150 | 200]`은 `C2`, `C3`, `C4`라는 child internal node들을 가집니다.
-마찬가지로 `[50 | 73]`도 `C0`, `C1-left`, `C1-right`를 child로 가집니다.
+마찬가지로 `[50 | 72]`도 `C0`, `C1-left`, `C1-right`를 child로 가집니다.
 
 즉 구조를 더 펼쳐 쓰면 아래처럼 이해할 수 있습니다.
 
 ```text
                          [100]
                         /     \
-                 [50 | 73]   [150 | 200]
+                 [50 | 72]   [150 | 200]
                  /   |   \     /    |    \
                C0  C1L  C1R   C2   C3    C4
               / \   / \   / \  / \  / \   / \

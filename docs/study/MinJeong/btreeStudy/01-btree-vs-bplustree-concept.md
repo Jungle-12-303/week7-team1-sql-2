@@ -386,7 +386,56 @@ B+ Tree의 대표 특징은 다음과 같습니다.
 - 범위 검색에 유리하다.
 - DB 인덱스 구현에서 자주 쓰인다.
 
-## 4-1. split할 때 어떤 key가 부모로 올라가는가
+## 4-1. internal key와 leaf key의 관계
+
+B+ Tree를 볼 때 가장 헷갈리기 쉬운 부분은 internal node의 key입니다.
+internal node의 key는 실제 row 위치를 직접 가진 값이 아니라, 아래 child 중 어느 쪽으로 내려갈지 정하는 **separator key**입니다.
+
+하지만 separator key가 실제 데이터 key와 아무 관계없는 임의의 값이라는 뜻은 아닙니다.
+보통 B+ Tree의 separator key는 leaf level에 실제로 존재하는 key를 기준으로 만들어집니다.
+
+예를 들어 leaf node가 아래처럼 나뉘었다고 가정합니다.
+
+```text
+[10 | 20] -> [30 | 40]
+```
+
+부모 internal node는 오른쪽 leaf의 첫 key인 `30`을 separator로 가질 수 있습니다.
+
+```text
+        [30]
+       /    \
+[10 | 20] -> [30 | 40]
+```
+
+여기서 부모의 `30`은 실제 row 위치를 직접 가지지 않습니다.
+하지만 실제 데이터 key `30`은 오른쪽 leaf에 남아 있습니다.
+
+즉 B+ Tree에서는 아래처럼 구분해서 이해해야 합니다.
+
+```text
+internal node의 30:
+검색 경로를 정하는 separator key
+
+leaf node의 30:
+실제 row_ref와 연결되는 데이터 key
+```
+
+또 하나 중요한 점은, 부모 key가 바로 아래 internal child에도 반드시 그대로 있어야 하는 것은 아니라는 점입니다.
+부모 key에 해당하는 실제 데이터 key는 leaf level에 남아 있으면 됩니다.
+
+```text
+부모 key:
+아래 subtree를 나누는 경계값
+
+leaf key:
+실제 row_ref를 가진 데이터 key
+```
+
+그래서 internal node만 잘라서 보면 어떤 key가 사라진 것처럼 보일 수 있습니다.
+하지만 전체 B+ Tree를 leaf level까지 보면 실제 데이터 key는 leaf에 남아 있습니다.
+
+## 4-2. split할 때 어떤 key가 부모로 올라가는가
 
 노드가 가득 차면 split이 일어납니다.
 이때 어떤 key가 부모 key가 되고, 어떤 key가 자식 node에 남는지는 사용자 마음대로 정하는 것이 아닙니다.
@@ -460,7 +509,7 @@ leaf node에는 실제 key와 row 위치가 그대로 남는다.
 우리 프로젝트는 B+ Tree입니다.
 따라서 split 기준은 사용자가 고르는 것이 아니라, 정렬된 key들을 나눈 뒤 **오른쪽 node의 첫 key를 부모에게 separator key로 전달하는 방식**으로 이해하면 됩니다.
 
-## 4-2. B+ Tree가 범위 검색에 유리한 이유
+## 4-3. B+ Tree가 범위 검색에 유리한 이유
 
 B+ Tree에서 가장 중요한 특징 중 하나는 **leaf 노드들이 옆으로 연결되어 있다**는 점입니다.
 
