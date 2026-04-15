@@ -371,29 +371,26 @@ flowchart LR
   "theme": "base",
   "themeVariables": {
     "background": "#ffffff",
-    "primaryColor": "#f8fafc",
-    "primaryTextColor": "#111827",
-    "primaryBorderColor": "#334155",
-    "lineColor": "#475569",
-    "secondaryColor": "#f1f5f9",
-    "secondaryTextColor": "#111827",
-    "tertiaryColor": "#e2e8f0",
-    "tertiaryTextColor": "#111827"
+    "primaryColor": "#ffffff",
+    "primaryTextColor": "#111111",
+    "primaryBorderColor": "#111111",
+    "lineColor": "#111111",
+    "secondaryColor": "#f3f4f6",
+    "secondaryTextColor": "#111111",
+    "tertiaryColor": "#e5e7eb",
+    "tertiaryTextColor": "#111111"
   }
 }}%%
-sequenceDiagram
-    participant Client
-    participant Executor
-    participant Storage
-    participant Index
+flowchart LR
+    A["Client<br/>INSERT INTO demo.students ..."] --> B["Executor<br/>next_id()"]
+    B --> C["Storage<br/>binary_writer_append_row()"]
+    C --> D["Executor<br/>row offset"]
+    D --> E["Index<br/>index_insert(id, offset)"]
+    E --> F["B+ Tree<br/>bpt_insert_recursive()"]
+    F --> G["Executor<br/>done"]
 
-    Client->>Executor: INSERT INTO demo.students ...
-    Executor->>Executor: next_id()
-    Executor->>Storage: binary_writer_append_row()
-    Storage-->>Executor: row offset
-    Executor->>Index: index_insert(id, offset)
-    Index->>Index: bpt_insert_recursive()
-    Index-->>Executor: done
+    classDef box fill:#ffffff,stroke:#111111,stroke-width:2px,color:#111111;
+    class A,B,C,D,E,F,G box;
 ```
 
 ### 2-5. 단건 조회는 어떻게 동작하는가
@@ -515,44 +512,26 @@ flowchart LR
   "theme": "base",
   "themeVariables": {
     "background": "#ffffff",
-    "primaryColor": "#f8fafc",
-    "primaryTextColor": "#111827",
-    "primaryBorderColor": "#334155",
-    "lineColor": "#475569",
-    "secondaryColor": "#f1f5f9",
-    "secondaryTextColor": "#111827",
-    "tertiaryColor": "#e2e8f0",
-    "tertiaryTextColor": "#111827",
-    "actorBkg": "#f8fafc",
-    "actorBorder": "#334155",
-    "actorTextColor": "#111827",
-    "signalColor": "#334155",
-    "signalTextColor": "#111827",
-    "labelBoxBkgColor": "#ffffff",
-    "labelBoxBorderColor": "#334155",
-    "labelTextColor": "#111827",
-    "loopTextColor": "#111827",
-    "noteBkgColor": "#eff6ff",
-    "noteBorderColor": "#334155",
-    "noteTextColor": "#111827",
-    "activationBorderColor": "#334155",
-    "activationBkgColor": "#dbeafe"
+    "primaryColor": "#ffffff",
+    "primaryTextColor": "#111111",
+    "primaryBorderColor": "#111111",
+    "lineColor": "#111111",
+    "secondaryColor": "#f3f4f6",
+    "secondaryTextColor": "#111111",
+    "tertiaryColor": "#e5e7eb",
+    "tertiaryTextColor": "#111111"
   }
 }}%%
-sequenceDiagram
-    participant U as User
-    participant P as Parser
-    participant E as Executor
-    participant S as Storage
-    participant B as B+ Tree
+flowchart LR
+    A["User<br/>INSERT INTO ..."] --> B["Parser<br/>Parsed INSERT query"]
+    B --> C["Executor<br/>Generate next id"]
+    C --> D["Storage<br/>Append row in binary format"]
+    D --> E["Executor<br/>Return row offset"]
+    E --> F["B+ Tree<br/>Insert (id, row offset)"]
+    F --> G["User<br/>Insert success"]
 
-    U->>P: INSERT INTO ...
-    P->>E: Parsed INSERT query
-    E->>E: Generate next id
-    E->>S: Append row in binary format
-    S-->>E: Return row offset
-    E->>B: Insert (id, row offset)
-    E-->>U: Insert success
+    classDef box fill:#ffffff,stroke:#111111,stroke-width:2px,color:#111111;
+    class A,B,C,D,E,F,G box;
 ```
 
 ### 3-3. SELECT 파이프라인
@@ -574,51 +553,30 @@ sequenceDiagram
     "secondaryColor": "#f3f4f6",
     "secondaryTextColor": "#111111",
     "tertiaryColor": "#e5e7eb",
-    "tertiaryTextColor": "#111111",
-    "actorBkg": "#ffffff",
-    "actorBorder": "#111111",
-    "actorTextColor": "#111111",
-    "signalColor": "#111111",
-    "signalTextColor": "#111111",
-    "labelBoxBkgColor": "#ffffff",
-    "labelBoxBorderColor": "#111111",
-    "labelTextColor": "#111111",
-    "loopTextColor": "#111111",
-    "noteBkgColor": "#f3f4f6",
-    "noteBorderColor": "#111111",
-    "noteTextColor": "#111111",
-    "activationBorderColor": "#111111",
-    "activationBkgColor": "#e5e7eb"
+    "tertiaryTextColor": "#111111"
   }
 }}%%
-sequenceDiagram
-    participant U as User
-    participant P as Parser
-    participant E as Executor
-    participant B as B+ Tree Index
-    participant S as Storage
-
-    rect rgb(243, 244, 246)
-        Note over U,S: Indexed path: WHERE id = ? / WHERE id range
-        U->>P: SELECT ... WHERE id ...
-        P->>E: Parsed SELECT query
-        E->>E: Detect id predicate
-        E->>B: Search id / range
-        B-->>E: row offset(s)
-        E->>S: Read row(s) by offset
-        S-->>E: row data
-        E-->>U: Query result
+flowchart TB
+    subgraph Indexed["Indexed path: WHERE id = ? / WHERE id range"]
+        direction LR
+        A["User<br/>SELECT ... WHERE id ..."] --> B["Parser<br/>Parsed SELECT query"]
+        B --> C["Executor<br/>Detect id predicate"]
+        C --> D["B+ Tree Index<br/>Search id / range"]
+        D --> E["Executor<br/>row offset(s)"]
+        E --> F["Storage<br/>Read row(s) by offset"]
+        F --> G["User<br/>Query result"]
     end
 
-    rect rgb(229, 231, 235)
-        Note over U,S: Non-indexed path: WHERE major = ? and other fields
-        U->>P: SELECT ... WHERE major ...
-        P->>E: Parsed SELECT query
-        E->>E: Detect non-id predicate
-        E->>S: Scan all rows
-        S-->>E: matched rows
-        E-->>U: Query result
+    subgraph NonIndexed["Non-indexed path: WHERE major = ? and other fields"]
+        direction LR
+        H["User<br/>SELECT ... WHERE major ..."] --> I["Parser<br/>Parsed SELECT query"]
+        I --> J["Executor<br/>Detect non-id predicate"]
+        J --> K["Storage<br/>Scan all rows"]
+        K --> L["User<br/>Query result"]
     end
+
+    classDef box fill:#ffffff,stroke:#111111,stroke-width:2px,color:#111111;
+    class A,B,C,D,E,F,G,H,I,J,K,L box;
 ```
 
 ## 3. B+ Tree 인덱스 구조
@@ -803,40 +761,26 @@ VALUES ("Kim", "CS", "3");
   "theme": "base",
   "themeVariables": {
     "background": "#ffffff",
-    "primaryColor": "#f8fafc",
-    "primaryTextColor": "#111827",
-    "primaryBorderColor": "#334155",
-    "lineColor": "#475569",
-    "secondaryColor": "#f1f5f9",
-    "secondaryTextColor": "#111827",
-    "tertiaryColor": "#e2e8f0",
-    "tertiaryTextColor": "#111827",
-    "actorBkg": "#f8fafc",
-    "actorBorder": "#334155",
-    "actorTextColor": "#111827",
-    "signalColor": "#334155",
-    "signalTextColor": "#111827",
-    "labelBoxBkgColor": "#ffffff",
-    "labelBoxBorderColor": "#334155",
-    "labelTextColor": "#111827",
-    "noteBkgColor": "#eff6ff",
-    "noteBorderColor": "#334155",
-    "noteTextColor": "#111827"
+    "primaryColor": "#ffffff",
+    "primaryTextColor": "#111111",
+    "primaryBorderColor": "#111111",
+    "lineColor": "#111111",
+    "secondaryColor": "#f3f4f6",
+    "secondaryTextColor": "#111111",
+    "tertiaryColor": "#e5e7eb",
+    "tertiaryTextColor": "#111111"
   }
 }}%%
-sequenceDiagram
-    participant U as User
-    participant E as Executor
-    participant S as Storage
-    participant B as B+ Tree
+flowchart LR
+    A["User<br/>INSERT INTO demo.students ..."] --> B["Executor<br/>next_id() -> 16"]
+    B --> C["Storage<br/>binary_writer_append_row()"]
+    C --> D["Executor<br/>row offset 0x100"]
+    D --> E["B+ Tree<br/>index_insert(16, 0x100)"]
+    E --> F["B+ Tree<br/>leaf insert / split if needed"]
+    F --> G["User<br/>INSERT 1"]
 
-    U->>E: INSERT INTO demo.students ...
-    E->>E: next_id() -> 16
-    E->>S: binary_writer_append_row()
-    S-->>E: row offset 0x100
-    E->>B: index_insert(16, 0x100)
-    B->>B: leaf insert / split if needed
-    E-->>U: INSERT 1
+    classDef box fill:#ffffff,stroke:#111111,stroke-width:2px,color:#111111;
+    class A,B,C,D,E,F,G box;
 ```
 
 ### 3-5. 단건 조회는 어떻게 동작하는가
@@ -920,7 +864,51 @@ flowchart LR
 
 ## 4. 시연
 
-### 4-1. CLI 기능 시연
+### 4-1. 100만 건 데이터 기반 성능 비교
+
+- 데이터 수: `1,000,000`건
+- 배치 그룹 수: 각 케이스당 `5회`
+- 그룹당 쿼리 반복 횟수: `30회`
+- 전체 삽입 시간: `0 ms`
+- 데이터셋 소스: `cache_reused (/work/tests/tmp/bench_cache/1000000)`
+- 비교 A: `WHERE id = ?` -> B+ Tree 인덱스 사용
+- 비교 B: `WHERE student_no = ?` -> 선형 탐색 사용
+
+단건 조회는 앞 / 중간 / 뒤 위치에 있는 학생 레코드를 대상으로 측정했습니다.
+
+| Target ID | Target Name | ID Index ms | StudentNo ms | Speedup |
+| ---: | --- | ---: | ---: | ---: |
+| 1 | `U1` | `5.900` | `5.580` | `0.95x` |
+| 500000 | `U500000` | `5.653` | `225.300` | `39.85x` |
+| 1000000 | `U1000000` | `6.513` | `446.573` | `68.57x` |
+
+```mermaid
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "background": "#ffffff",
+    "primaryColor": "#ffffff",
+    "primaryTextColor": "#111111",
+    "primaryBorderColor": "#111111",
+    "lineColor": "#111111",
+    "secondaryColor": "#f3f4f6",
+    "secondaryTextColor": "#111111",
+    "tertiaryColor": "#e5e7eb",
+    "tertiaryTextColor": "#111111"
+  }
+}}%%
+xychart-beta
+    title "Linear Scan / B+ Tree Speedup"
+    x-axis ["id=1", "id=500000", "id=1000000"]
+    y-axis "times slower" 0 --> 75
+    bar [0.95, 39.85, 68.57]
+```
+
+- B+ Tree 기반 `WHERE id = ?`는 전체 구간에서 `약 6ms` 수준으로 거의 일정한 응답 시간을 유지함
+- `WHERE student_no = ?` 선형 탐색은 앞쪽 데이터에서는 차이가 거의 없지만, 중간과 마지막 데이터에서는 각각 `39.85x`, `68.57x`까지 느려짐
+- 데이터 위치가 뒤로 갈수록 선형 탐색 비용이 급격히 커지고, 인덱스 조회의 장점이 더 분명하게 드러남
+
+### 4-2. CLI 기능 시연
 
 시연 순서
 1. `INSERT`로 레코드 추가
@@ -941,81 +929,11 @@ SELECT * FROM demo.students WHERE id >= 1;
 SELECT * FROM demo.students WHERE major = "CS";
 ```
 
-### 4-2. CLI 예외 처리
+### 4-3. CLI 예외 처리
 
 - 존재하지 않는 ID 조회
 - 잘못된 조건식 입력
 - 지원하지 않는 SQL 형식 입력
-
-### 4-3. 100만 건 데이터 기반 성능 비교
-
-- 데이터 수: `1,000,000`건 이상
-- 배치 그룹 수: 각 케이스당 `5회`
-- 그룹당 쿼리 반복 횟수: `30회`
-- 전체 삽입 시간: `0 ms`
-- 데이터셋 소스: `cache_reused (/work/tests/tmp/bench_cache/1000000)`
-- 비교 A: `WHERE id = ?` -> B+ Tree 인덱스 사용
-- 비교 B: `WHERE student_no = ?` -> 선형 탐색 사용
-- 단건 조회는 앞 / 중간 / 뒤 위치별로 추가 비교
-- 범위 조회는 leaf 순회 경로와 선형 탐색 경로를 추가 비교
-
-#### 1. 단건 조회 위치별 비교
-
-단건 조회는 데이터 위치에 따라 선형 탐색 비용이 달라지는지 확인하기 위해 앞 / 중간 / 뒤 구간으로 나누어 비교합니다. 각 케이스는 `5개 배치 그룹`으로 측정했고, 각 그룹에서는 동일한 쿼리를 `30회` 반복 실행했습니다.
-
-| Target ID | Target Name | ID Index avg / p95 | StudentNo avg / p95 | 선형 탐색 / B+ Tree |
-| ---: | --- | ---: | ---: | ---: |
-| 1 | `U1` | `5.920 / n/a ms` | `5.660 / n/a ms` | `0.96x` |
-| 500000 | `U500000` | `6.093 / n/a ms` | `227.067 / n/a ms` | `37.27x` |
-| 1000000 | `U1000000` | `6.393 / n/a ms` | `458.353 / n/a ms` | `71.70x` |
-
-| 속도 차이 요약 | 의미 |
-| --- | --- |
-| `0.96x` | 맨 앞 데이터는 두 방식 차이가 거의 없음 |
-| `37.27x` | 중간 데이터부터 선형 탐색 비용이 급격히 증가 |
-| `71.70x` | 마지막 데이터에서는 인덱스 사용 효과가 가장 크게 드러남 |
-
-- B+ Tree 기반 `WHERE id = ?`는 전체 구간에서 `약 6ms` 수준으로 거의 일정한 응답 시간을 유지함
-- `WHERE student_no = ?` 선형 탐색은 앞쪽 데이터에서는 큰 차이가 없지만, 중간과 마지막 데이터에서는 각각 `37.27x`, `71.70x`까지 느려짐
-- 데이터 위치가 뒤로 갈수록 선형 탐색 비용이 급격히 커지고, 인덱스 조회의 장점이 더 분명하게 드러남
-
-#### 2. 범위 조회 비교
-
-범위 조회는 B+ Tree의 leaf chain 순회가 실제로 어떤 장점을 가지는지 보여주는 비교입니다.
-
-| 항목 | 예시 쿼리 | 실행 시간 | 접근 경로 |
-| --- | --- | ---: | --- |
-| 작은 범위 조회 | `WHERE id >= 500000 AND id < 500100` | 620 ms | B+ Tree Leaf Scan |
-| 같은 범위 선형 탐색 | `WHERE id >= 500000 AND id < 500100` | 1490 ms | Linear Scan |
-
-```mermaid
-%%{init: {
-  "theme": "base",
-  "themeVariables": {
-    "background": "#ffffff",
-    "primaryColor": "#f8fafc",
-    "primaryTextColor": "#111827",
-    "primaryBorderColor": "#334155",
-    "lineColor": "#475569",
-    "secondaryColor": "#f1f5f9",
-    "secondaryTextColor": "#111827",
-    "tertiaryColor": "#e2e8f0",
-    "tertiaryTextColor": "#111827"
-  }
-}}%%
-xychart-beta
-    title "Range Query Comparison"
-    x-axis ["B+ Tree Range", "Linear Range"]
-    y-axis "ms" 0 --> 1600
-    bar [620, 1490]
-```
-
-#### 해석 포인트
-
-- `WHERE id = ?`는 row 위치를 직접 찾기 때문에 조회 비용이 작음
-- 단건 조회에서는 선형 탐색이 데이터 위치에 따라 더 느려짐
-- 범위 조회에서는 B+ Tree가 시작 leaf를 찾은 뒤 이어서 순회하므로 효율적임
-- 동일한 SELECT라도 조건과 접근 방식에 따라 실행 경로가 달라짐
 
 ## 5. 테스트
 
