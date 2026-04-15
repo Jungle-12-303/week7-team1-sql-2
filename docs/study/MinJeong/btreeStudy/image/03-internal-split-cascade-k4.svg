@@ -1,0 +1,162 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="1120" viewBox="0 0 1180 1120">
+  <defs>
+    <style>
+      .bg { fill: #f8fafc; }
+      .title { font: 700 24px sans-serif; fill: #111827; }
+      .sub { font: 500 15px sans-serif; fill: #475569; }
+      .label { font: 700 17px sans-serif; fill: #111827; }
+      .note { font: 500 14px sans-serif; fill: #475569; }
+      .small { font: 500 13px sans-serif; fill: #475569; }
+      .nodeText { font: 700 14px sans-serif; fill: #111827; }
+      .leafText { font: 700 12px sans-serif; fill: #14532d; }
+      .root { fill: #fef3c7; stroke: #d97706; stroke-width: 2; }
+      .internal { fill: #dbeafe; stroke: #2563eb; stroke-width: 2; }
+      .newInternal { fill: #fee2e2; stroke: #dc2626; stroke-width: 2; }
+      .leaf { fill: #dcfce7; stroke: #16a34a; stroke-width: 2; }
+      .line { stroke: #64748b; stroke-width: 2; fill: none; }
+      .arrow { stroke: #dc2626; stroke-width: 2.4; fill: none; marker-end: url(#arrow); }
+      .next { stroke: #16a34a; stroke-width: 2; fill: none; marker-end: url(#greenArrow); stroke-dasharray: 5 4; }
+      .divider { stroke: #cbd5e1; stroke-width: 1.5; }
+    </style>
+    <marker id="arrow" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M 0 0 L 10 4 L 0 8 z" fill="#dc2626"/>
+    </marker>
+    <marker id="greenArrow" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M 0 0 L 10 4 L 0 8 z" fill="#16a34a"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="1180" height="1120"/>
+  <text class="title" x="40" y="42">k=4 예시: internal split이 root까지 전파되는 흐름</text>
+  <text class="sub" x="40" y="68">단순화를 위해 최대 key 수를 4개로 가정합니다. 실제 프로젝트의 BPTREE_MAX_KEYS는 31입니다.</text>
+  <line class="divider" x1="40" y1="92" x2="1140" y2="92"/>
+
+  <!-- Step 1 -->
+  <text class="label" x="40" y="128">1. 삽입 전: root, 대상 internal, 대상 leaf가 모두 가득 찬 상태</text>
+  <rect class="root" x="410" y="150" width="360" height="42" rx="6"/>
+  <text class="nodeText" x="445" y="176">root [50 | 100 | 150 | 200]</text>
+
+  <line class="line" x1="590" y1="192" x2="590" y2="225"/>
+  <rect class="internal" x="400" y="225" width="380" height="42" rx="6"/>
+  <text class="nodeText" x="432" y="251">target internal C1 [60 | 70 | 80 | 90]</text>
+
+  <line class="line" x1="590" y1="267" x2="590" y2="300"/>
+  <rect class="leaf" x="425" y="300" width="330" height="38" rx="6"/>
+  <text class="leafText" x="477" y="324">target leaf [71 | 72 | 73 | 74]</text>
+  <text class="note" x="805" y="174">id=75 삽입</text>
+  <path class="arrow" d="M 805 181 C 770 215, 745 265, 755 316"/>
+
+  <!-- Step 2 -->
+  <line class="divider" x1="40" y1="370" x2="1140" y2="370"/>
+  <text class="label" x="40" y="405">2. leaf split: 오른쪽 leaf의 첫 key 73을 부모 internal에 복사</text>
+
+  <rect class="leaf" x="210" y="435" width="220" height="38" rx="6"/>
+  <text class="leafText" x="272" y="459">[71 | 72]</text>
+  <rect class="leaf" x="500" y="435" width="240" height="38" rx="6"/>
+  <text class="leafText" x="553" y="459">[73 | 74 | 75]</text>
+  <path class="next" d="M 430 454 L 500 454"/>
+  <text class="note" x="780" y="446">promoted_key = 73</text>
+  <text class="small" x="780" y="468">leaf split에서는 73이 leaf에도 남습니다.</text>
+
+  <!-- Step 3 -->
+  <line class="divider" x1="40" y1="510" x2="1140" y2="510"/>
+  <text class="label" x="40" y="545">3. C1 internal split: 73을 넣으면 5개가 되어 C1이 둘로 나뉨</text>
+
+  <rect class="internal" x="80" y="575" width="350" height="42" rx="6"/>
+  <text class="nodeText" x="108" y="601">C1 병합 [60 | 70 | 73 | 80 | 90]</text>
+  <path class="arrow" d="M 445 596 L 515 596"/>
+  <rect class="internal" x="530" y="555" width="180" height="42" rx="6"/>
+  <text class="nodeText" x="567" y="581">C1L [60 | 70]</text>
+  <rect class="newInternal" x="770" y="555" width="180" height="42" rx="6"/>
+  <text class="nodeText" x="807" y="581">C1R [80 | 90]</text>
+  <text class="note" x="560" y="635">internal split에서는 중앙 key 73이 부모로 이동합니다.</text>
+
+  <rect class="leaf" x="515" y="665" width="90" height="32" rx="5"/>
+  <text class="leafText" x="535" y="686">leaf</text>
+  <rect class="leaf" x="620" y="665" width="90" height="32" rx="5"/>
+  <text class="leafText" x="640" y="686">leaf</text>
+  <rect class="leaf" x="755" y="665" width="120" height="32" rx="5"/>
+  <text class="leafText" x="770" y="686">[73|74|75]</text>
+  <rect class="leaf" x="890" y="665" width="90" height="32" rx="5"/>
+  <text class="leafText" x="910" y="686">leaf</text>
+  <line class="line" x1="620" y1="597" x2="560" y2="665"/>
+  <line class="line" x1="620" y1="597" x2="665" y2="665"/>
+  <line class="line" x1="860" y1="597" x2="815" y2="665"/>
+  <line class="line" x1="860" y1="597" x2="935" y2="665"/>
+
+  <!-- Step 4 -->
+  <line class="divider" x1="40" y1="735" x2="1140" y2="735"/>
+  <text class="label" x="40" y="770">4. root split 후 최종 모양: leaf까지 전부 펼쳐서 보기</text>
+
+  <rect class="root" x="520" y="795" width="140" height="42" rx="6"/>
+  <text class="nodeText" x="555" y="821">[100]</text>
+
+  <rect class="internal" x="300" y="860" width="180" height="40" rx="6"/>
+  <text class="nodeText" x="335" y="885">[50 | 73]</text>
+  <rect class="newInternal" x="700" y="860" width="190" height="40" rx="6"/>
+  <text class="nodeText" x="735" y="885">[150 | 200]</text>
+  <line class="line" x1="590" y1="837" x2="390" y2="860"/>
+  <line class="line" x1="590" y1="837" x2="795" y2="860"/>
+
+  <rect class="internal" x="120" y="925" width="105" height="34" rx="5"/>
+  <text class="nodeText" x="146" y="947">C0</text>
+  <rect class="internal" x="255" y="925" width="130" height="34" rx="5"/>
+  <text class="nodeText" x="289" y="947">C1L</text>
+  <rect class="newInternal" x="415" y="925" width="130" height="34" rx="5"/>
+  <text class="nodeText" x="449" y="947">C1R</text>
+  <rect class="internal" x="635" y="925" width="105" height="34" rx="5"/>
+  <text class="nodeText" x="661" y="947">C2</text>
+  <rect class="internal" x="775" y="925" width="105" height="34" rx="5"/>
+  <text class="nodeText" x="801" y="947">C3</text>
+  <rect class="internal" x="915" y="925" width="105" height="34" rx="5"/>
+  <text class="nodeText" x="941" y="947">C4</text>
+  <line class="line" x1="390" y1="900" x2="172" y2="925"/>
+  <line class="line" x1="390" y1="900" x2="320" y2="925"/>
+  <line class="line" x1="390" y1="900" x2="480" y2="925"/>
+  <line class="line" x1="795" y1="900" x2="687" y2="925"/>
+  <line class="line" x1="795" y1="900" x2="827" y2="925"/>
+  <line class="line" x1="795" y1="900" x2="967" y2="925"/>
+
+  <rect class="leaf" x="75" y="1000" width="80" height="32" rx="5"/>
+  <text class="leafText" x="89" y="1021">&lt;50</text>
+  <rect class="leaf" x="170" y="1000" width="80" height="32" rx="5"/>
+  <text class="leafText" x="184" y="1021">50~60</text>
+  <line class="line" x1="172" y1="959" x2="115" y2="1000"/>
+  <line class="line" x1="172" y1="959" x2="210" y2="1000"/>
+
+  <rect class="leaf" x="270" y="1000" width="80" height="32" rx="5"/>
+  <text class="leafText" x="284" y="1021">60~70</text>
+  <rect class="leaf" x="365" y="1000" width="80" height="32" rx="5"/>
+  <text class="leafText" x="379" y="1021">70~73</text>
+  <line class="line" x1="320" y1="959" x2="310" y2="1000"/>
+  <line class="line" x1="320" y1="959" x2="405" y2="1000"/>
+
+  <rect class="leaf" x="465" y="1000" width="95" height="32" rx="5"/>
+  <text class="leafText" x="477" y="1021">[73|74|75]</text>
+  <rect class="leaf" x="575" y="1000" width="80" height="32" rx="5"/>
+  <text class="leafText" x="589" y="1021">80~90</text>
+  <line class="line" x1="480" y1="959" x2="512" y2="1000"/>
+  <line class="line" x1="480" y1="959" x2="615" y2="1000"/>
+
+  <rect class="leaf" x="675" y="1000" width="80" height="32" rx="5"/>
+  <text class="leafText" x="689" y="1021">100~150</text>
+  <rect class="leaf" x="770" y="1000" width="80" height="32" rx="5"/>
+  <text class="leafText" x="784" y="1021">150~200</text>
+  <rect class="leaf" x="865" y="1000" width="80" height="32" rx="5"/>
+  <text class="leafText" x="879" y="1021">&gt;200</text>
+  <line class="line" x1="687" y1="959" x2="715" y2="1000"/>
+  <line class="line" x1="827" y1="959" x2="810" y2="1000"/>
+  <line class="line" x1="967" y1="959" x2="905" y2="1000"/>
+
+  <path class="next" d="M 155 1016 L 170 1016"/>
+  <path class="next" d="M 250 1016 L 270 1016"/>
+  <path class="next" d="M 350 1016 L 365 1016"/>
+  <path class="next" d="M 445 1016 L 465 1016"/>
+  <path class="next" d="M 560 1016 L 575 1016"/>
+  <path class="next" d="M 655 1016 L 675 1016"/>
+  <path class="next" d="M 755 1016 L 770 1016"/>
+  <path class="next" d="M 850 1016 L 865 1016"/>
+
+  <text class="note" x="40" y="1070">C0, C2, C3, C4는 root가 원래 가지고 있던 child입니다. C1L, C1R은 C1이 split되어 생긴 child입니다.</text>
+  <text class="note" x="40" y="1095">모든 leaf가 같은 깊이에 있고, leaf끼리는 next로 옆으로 이어집니다. 각 leaf의 값 범위는 이해용으로 단순화했습니다.</text>
+</svg>
