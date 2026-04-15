@@ -66,9 +66,20 @@ docker build -t week7-mini-sql .
 docker build -t week7-mini-sql .
 ```
 
-데모:
+인터랙티브 모드:
 ```bash
-docker run --rm week7-mini-sql
+docker run -it --rm week7-mini-sql
+```
+
+프롬프트에서 SQL을 직접 입력:
+```sql
+SELECT * FROM demo.students;
+SELECT name, grade FROM demo.students WHERE id = 2;
+```
+
+파일 실행 모드(기존 방식):
+```bash
+docker run --rm week7-mini-sql examples/db examples/sql/demo_workflow.sql
 ```
 
 ## 8. 4분 데모 스크립트 + Q&A
