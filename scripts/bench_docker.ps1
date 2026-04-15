@@ -19,31 +19,37 @@ mkdir -p /tmp/bench/demo /tmp/sql
 echo "id|name|major|grade" > /tmp/bench/demo/students.schema
 : > /tmp/bench/demo/students.data
 
+now_ms() {
+  date +%s%3N
+}
+
 for i in `$(seq 1 $Rows); do
   printf "INSERT INTO demo.students (name, major, grade) VALUES ('U%s', 'M%s', 'A');\n" "`$i" "`$((i%10))"
 done > /tmp/sql/insert.sql
 
-t0=`$(date +%s)
+t0=`$(now_ms)
 /app/build/mini_sql /tmp/bench /tmp/sql/insert.sql >/tmp/out_insert.txt
-t1=`$(date +%s)
+t1=`$(now_ms)
 
 echo "SELECT name FROM demo.students WHERE id = $TargetId;" > /tmp/sql/q_id.sql
 echo "SELECT name FROM demo.students WHERE major = 'M5';" > /tmp/sql/q_lin.sql
 
-t2=`$(date +%s)
+t2=`$(now_ms)
 /app/build/mini_sql /tmp/bench /tmp/sql/q_id.sql >/tmp/out_id.txt
-t3=`$(date +%s)
+t3=`$(now_ms)
 
-t4=`$(date +%s)
+t4=`$(now_ms)
 /app/build/mini_sql /tmp/bench /tmp/sql/q_lin.sql >/tmp/out_lin.txt
-t5=`$(date +%s)
+t5=`$(now_ms)
 
-echo "insert_total_sec=`$((t1-t0))"
-echo "id_query_sec=`$((t3-t2))"
-echo "linear_query_sec=`$((t5-t4))"
-echo "--- id result ---"
+echo "insert_total_ms=`$((t1-t0))"
+echo "id_query_ms=`$((t3-t2))"
+echo "linear_query_ms=`$((t5-t4))"
+echo "case_a_path=B+TREE_ID_INDEX"
+echo "case_b_path=LINEAR_SCAN_MAJOR"
+echo "--- case A result (B+ tree id index) ---"
 tail -n 5 /tmp/out_id.txt
-echo "--- linear result ---"
+echo "--- case B result (linear scan) ---"
 tail -n 5 /tmp/out_lin.txt
 "@
 
