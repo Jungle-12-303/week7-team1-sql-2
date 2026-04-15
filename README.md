@@ -194,8 +194,8 @@ flowchart TD
     O14 -.-> D14
     O15 -.-> D15
 
-    classDef offset fill:#111827,stroke:#cbd5e1,stroke-width:2px,color:#f9fafb;
-    classDef data fill:#374151,stroke:#d1d5db,stroke-width:2px,color:#f9fafb;
+    classDef offset fill:#ffffff,stroke:#334155,stroke-width:2px,color:#111111;
+    classDef data fill:#f3f4f6,stroke:#334155,stroke-width:2px,color:#111111;
     linkStyle 0,1,2,3,4,5,6,7,8,9,10,11,12,13 stroke:#d1d5db,stroke-width:2px,stroke-dasharray: 4 4;
     class O1,O2,O3,O4,O5,O7,O8,O9,O10,O11,O12,O13,O14,O15 offset;
     class D1,D2,D3,D4,D5,D7,D8,D9,D10,D11,D12,D13,D14,D15 data;
@@ -233,8 +233,8 @@ flowchart LR
     I --> K["Result Output"]
     J --> K
 
-    classDef box fill:#111827,stroke:#f9fafb,stroke-width:2px,color:#f9fafb;
-    classDef decision fill:#1e3a8a,stroke:#bfdbfe,stroke-width:2px,color:#eff6ff;
+    classDef box fill:#ffffff,stroke:#111111,stroke-width:2px,color:#111111;
+    classDef decision fill:#f3f4f6,stroke:#111111,stroke-width:2px,color:#111111;
     class A,B,C,E,F,G,H,I,J,K box;
     class D decision;
 ```
@@ -305,28 +305,28 @@ sequenceDiagram
   "theme": "base",
   "themeVariables": {
     "background": "#ffffff",
-    "primaryColor": "#f8fafc",
-    "primaryTextColor": "#111827",
-    "primaryBorderColor": "#334155",
-    "lineColor": "#475569",
-    "secondaryColor": "#f1f5f9",
-    "secondaryTextColor": "#111827",
-    "tertiaryColor": "#e2e8f0",
-    "tertiaryTextColor": "#111827",
-    "actorBkg": "#f8fafc",
-    "actorBorder": "#334155",
-    "actorTextColor": "#111827",
-    "signalColor": "#334155",
-    "signalTextColor": "#111827",
+    "primaryColor": "#ffffff",
+    "primaryTextColor": "#111111",
+    "primaryBorderColor": "#111111",
+    "lineColor": "#111111",
+    "secondaryColor": "#f3f4f6",
+    "secondaryTextColor": "#111111",
+    "tertiaryColor": "#e5e7eb",
+    "tertiaryTextColor": "#111111",
+    "actorBkg": "#ffffff",
+    "actorBorder": "#111111",
+    "actorTextColor": "#111111",
+    "signalColor": "#111111",
+    "signalTextColor": "#111111",
     "labelBoxBkgColor": "#ffffff",
-    "labelBoxBorderColor": "#334155",
-    "labelTextColor": "#111827",
-    "loopTextColor": "#111827",
-    "noteBkgColor": "#eff6ff",
-    "noteBorderColor": "#334155",
-    "noteTextColor": "#111827",
-    "activationBorderColor": "#334155",
-    "activationBkgColor": "#dcfce7"
+    "labelBoxBorderColor": "#111111",
+    "labelTextColor": "#111111",
+    "loopTextColor": "#111111",
+    "noteBkgColor": "#f3f4f6",
+    "noteBorderColor": "#111111",
+    "noteTextColor": "#111111",
+    "activationBorderColor": "#111111",
+    "activationBkgColor": "#e5e7eb"
   }
 }}%%
 sequenceDiagram
@@ -336,7 +336,7 @@ sequenceDiagram
     participant B as B+ Tree Index
     participant S as Storage
 
-    rect rgb(17, 24, 39)
+    rect rgb(243, 244, 246)
         Note over U,S: Indexed path: WHERE id = ? / WHERE id range
         U->>P: SELECT ... WHERE id ...
         P->>E: Parsed SELECT query
@@ -348,7 +348,7 @@ sequenceDiagram
         E-->>U: Query result
     end
 
-    rect rgb(31, 41, 55)
+    rect rgb(229, 231, 235)
         Note over U,S: Non-indexed path: WHERE major = ? and other fields
         U->>P: SELECT ... WHERE major ...
         P->>E: Parsed SELECT query
@@ -393,8 +393,8 @@ flowchart LR
     E["WHERE major = 'CS'"] --> F["Linear Scan"]
     F --> G["Compare all student rows"]
 
-    classDef index fill:#1e3a8a,stroke:#bfdbfe,stroke-width:2px,color:#eff6ff;
-    classDef scan fill:#374151,stroke:#d1d5db,stroke-width:2px,color:#f9fafb;
+    classDef index fill:#ffffff,stroke:#111111,stroke-width:2px,color:#111111;
+    classDef scan fill:#f3f4f6,stroke:#111111,stroke-width:2px,color:#111111;
     class A,B,C,D index;
     class E,F,G scan;
 ```
@@ -521,7 +521,7 @@ flowchart LR
     D --> E["build_index_callback()"]
     E --> F["g_next_id_counter = max id"]
 
-    classDef box fill:#111827,stroke:#f9fafb,stroke-width:2px,color:#f9fafb;
+    classDef box fill:#ffffff,stroke:#111111,stroke-width:2px,color:#111111;
     class A,B,C,D,E,F box;
 ```
 
@@ -615,8 +615,8 @@ flowchart LR
     C --> D["0x80"]
     D --> E["id=8, name=Lim, major=CS, grade=4"]
 
-    classDef tree fill:#166534,stroke:#dcfce7,stroke-width:2px,color:#f9fafb;
-    classDef data fill:#374151,stroke:#d1d5db,stroke-width:2px,color:#f9fafb;
+    classDef tree fill:#22c55e,stroke:#166534,stroke-width:2px,color:#052e16;
+    classDef data fill:#f3f4f6,stroke:#111111,stroke-width:2px,color:#111111;
     class A,B,C tree;
     class D,E data;
 ```
